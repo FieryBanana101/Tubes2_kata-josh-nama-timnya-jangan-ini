@@ -1,0 +1,6 @@
+[package]
+name = "Tubes2_kata-josh-nama-timnya-jangan-ini"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]

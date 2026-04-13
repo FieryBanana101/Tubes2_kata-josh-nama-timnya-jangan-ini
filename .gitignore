@@ -1,0 +1,9 @@
+*.o
+*.log
+*.aux
+*.out
+*.toc
+
+# Added by cargo
+
+/target
