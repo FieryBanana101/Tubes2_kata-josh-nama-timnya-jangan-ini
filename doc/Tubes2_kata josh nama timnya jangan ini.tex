@@ -19,6 +19,7 @@
 \usepackage{fancyhdr}
 \usepackage[utf8]{inputenc}
 
+\usepackage{float}
 \usepackage{forest}
 \usepackage{xcolor}
 \usepackage{amsmath}
@@ -28,6 +29,7 @@
 \usepackage{color}
 \usepackage{hyperref}
 \usepackage{minted}
+\usepackage{algorithm}
 \usepackage{algpseudocode}
 
 \geometry{left=3cm,right=3cm,top=3cm,bottom=3cm}
@@ -63,6 +65,14 @@
 
 % Figure prefix
 \renewcommand{\figurename}{Gambar}
+
+% Remove indentation
+\setlength{\parindent}{0pt}
+
+% Algorithm float position
+\newfloat{algorithm}{t}{lop}
+
+
 
 \begin{document}
 
@@ -128,7 +138,7 @@ Komponen-komponen penting yang terdapat pada tugas besar ini antara lain:
 
 Pada tugas ini, terdapat spesifikasi wajib untuk membuat aplikasi traversal pohon HTML (DOM Tree) yang menggunakan algoritma Breadth First Search (BFS) dan Depth First Search (DFS) untuk melakukan pencarian elemen berdasarkan CSS selector pada struktur DOM dengan detail sebagai berikut,
 \begin{itemize}
-    \item Buatlah sebuah aplikasi berbasis web yang terdiri dari frontend bebas dan backend dalam bahasa \textbf{Go}, \textbf{C#}, \textbf{Rust}, atau \textbf{Typescript} yang mengimplementasikan algoritma \textbf{BFS} dan \textbf{DFS} untuk melakukan penelusuran CSS pada pohon DOM.
+    \item Buatlah sebuah aplikasi berbasis web yang terdiri dari frontend bebas dan backend dalam bahasa \textbf{Go}, \textbf{C\#}, \textbf{Rust}, atau \textbf{Typescript} yang mengimplementasikan algoritma \textbf{BFS} dan \textbf{DFS} untuk melakukan penelusuran CSS pada pohon DOM.
     \item Aplikasi dapat melakukan scraping HTML dari sebuah website melalui URL yang diberikan oleh pengguna
     \item Secara umum, berikut adalah input yang diharapkan,
     \begin{enumerate}
@@ -163,7 +173,526 @@ Selain itu terdapat spesifikasi bonus tugas besar (opsional) dengan poin tambaha
 
 \section{Landasan Teori}
 
+\subsection{Graph Traversal}
+Graph Traversal atau traversal graf adalah operasi yang dapat dilakukan pada sebuah graf dengan mengunjungi simpul-simpul yang ada secara sistematik.
+Terdapat berbagai jenis traversal graf, misalnya pencarian melebar (\textit{breadth first search}/BFS) dan pencarian mendalam (\textit{depth first search}/DFS).
+Untuk melakukan traversal graf, terdapat asumsi bahwa semua simpul yang ingin dikunjungi harus saling terhubung (berada pada satu \textit{connected component} yang sama) \cite{stima-graph-1}.\\
+
+Setiap kali mengunjungi simpul, algoritma dapat melakukan suboperasi seperti mencetak informasi di dalam simpul, memanipulasi nilainya, dan lain-lain.
+Karena graf merupakan representasi suatu persoalan, maka melakukan traversal di dalam graf dapat diartikan sebagai melakukan pencarian solusi persoalan yang direpresentrasikan dengan graf tersebut \cite{stima-graph-1}. \\
+
+
+Algoritma pencarian pada graf berbasis solusi dapat diklasifikasin sebagai \cite{stima-graph-1}:
+\begin{enumerate}
+    \item \textbf{Tanpa informasi} (\textit{uninformed}/\textit{blind search})
+    \begin{itemize}
+        \item Tidak ada informasi tambahan yang disediakan tentang seberapa dekat suatu simpul dengan tujuan
+        \item Satu-satunya informasi hanya dari graf itu sendiri
+        \item Contoh algoritma: DFS, BFS, Depth Limited Search, Iterative Deepening Search, Uniform Cost Search
+    \end{itemize}
+    \item \textbf{Dengan informasi} (\textit{informed search})
+    \begin{itemize}
+        \item Pencarian berbasis heuristik
+        \item Menggunakan informasi tambahan berupa heuristic function untuk memperkirakan seberapa dekat suatu simpul ke tujuan, atau dengan kata lain simpula mana yang “lebih menjanjikan” ke simpul tujuan.
+        \item Contoh algoritma: Greedy Best First Search, A*
+    \end{itemize}
+\end{enumerate} \\
+
+
+Representasi graf dalam pencarian solusi dapat dibagi menjadi dua pendekatan \cite{stima-graph-2}:
+\begin{enumerate}
+    \item \textbf{Graf statis}: graf yang sudah tersedia sebelum proses pencarian dilakukan dan langsung direpresentasikan sebagai struktur data
+    \item \textbf{Graf dinamis}: graf tidak tersedia sebelum pencarian dan dibangun secara bertahap selama pencarian solusi 
+\end{enumerate} \\
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=9cm, height=6cm]{section2-static-graph.png}
+    \caption{Contoh graf statis}
+    \label{fig:section2-static-graph}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=13cm, height=6cm]{section2-dynamic-graph.png}
+    \caption{Contoh graf dinamis}
+    \label{fig:section2-dynamic-graph}
+\end{figure}
+
+
+Terkait pencarian solusi dengan traversal pada graph dinamis perlu memperhatikan hal-hal berikut \cite{stima-graph-2}:
+\begin{itemize}
+    \item Persoalan diselesaikan dengan melakukan pencarian solusi sambil membangun graf (umumnya bentuk khusus pohon) secara bertahap
+    \item Pencarian solusi ekuivalen dengan pembentukan pohon dinamis
+    \item Simpul dibuat lalu diperiksa apakah merupakan simpul solusi. Jika simpul merupakan solusi maka pencarian selesai (jika hanya satu solusi ditemukan) atau dilanjutkan mencari solusi lain (semua solusi ditemukan)
+    \item Representasi pohon dinamis:
+    \begin{enumerate}
+        \item Dinamakan psebagai \textbf{pohon ruang status} (\textit{state space tree})
+        \item \textbf{Simpul} menyatakan status persoalan (\textit{problem state})
+        \item \textbf{Akar}: \textit{initial state}
+        \item \textbf{Daun}: \textit{solution}/\textit{goal state}
+        \item \textbf{Cabang}: \textit{operator}/langkah dalam persoalan
+        \item \textbf{Ruang status} (\textit{state space}): himpunan semua simpul
+        \item \textbf{Ruang solusi}: himpunan status solusi
+    \end{enumerate}
+    \item \textbf{Solusi}: lintasan dari akar ke simpul solusi
+\end{itemize} \\
+
+
+Teknik pencarian menggunakan algoritma traversal graf dapat dievaluasi dengan properti-properti berikut \cite{stima-graph-2}:
+\begin{enumerate}    
+    \item \textbf{Completeness}: terkait apakah teknik pencarian menjamin ditemukannya solusi (jika ada)
+    \item \textbf{Optimality}: terkait apakah teknik pencarian menjamin mendapatkan solusi yang optimal
+    \item \textbf{Time Complexity}: waktu yang diperlukan untuk mencapai simpul solusi
+    \item \textbf{Space Complexity}: ruang memori yang diperlukan selama melakukan pencarian
+    \item Kompleksitas waktu dan ruang diukur dengan menggunakan istilah berikut,
+    \begin{itemize}
+        \item $b$ (\textit{branching factor}): maksimum pencabangan yang mungkin dari suatu simpul
+        \item $d$ (\textit{depth}): kedalaman dari solusi terbaik (dengan cost terendah, sesuai definisi cost pada masalah)
+        \item $m$: maksimum kedalaman dari ruang status (mungkin memiliki nilai $\infty$)
+    \end{itemize}
+\end{enumerate} \\
+
+\subsubsection{Depth First Search}
+
+Depth First Search yaitu traversal graf secara mendalam yang dapat digambarkan dengan algoritma rekursif berikut ini (traversal dimulai dari simpul v) \cite{stima-graph-1},
+\begin{enumerate}
+    \item Kunjungi simpul $v$ (simpul saat ini)
+    \item Kunjungi simpul $w$ yang bertetangga dengan simpul $v$.
+    \item Ulangi DFS mulai dari simpul $w$ tersebut
+    \item Ketika mencapai simpul $u$ sedemikian sehingga semua simpul yang bertetangga dengannya telah dikunjungi,
+    pencarian dirunut-balik (\textit{backtrack}) ke simpul terakhir yang dikunjungi sebelumnya dan mempunyai simpul
+    yang belum dikunjungi.
+    \item Pencarian berakhir bila tidak ada lagi simpul yang belum dikunjungi yang dapat dicapai dari simpul yang
+    telah dikunjungi.
+\end{enumerate}
+
+
+Struktur data yang dibutuhkan untuk DFS secara rekursif yaitu hanya,
+\begin{enumerate}
+    \item Tabel boolean yang melacak simpul yang telah dikunjungi, dengan deskripsi:
+    \begin{itemize}
+        \item $visited : array[l..n]$ of boolean
+        \item $visited[i] = true$ jika simpul $i$ sudah dikunjungi
+        \item $visited[i] = false$ jika simpul $i$ belum dikunjungi
+    \end{itemize}
+\end{enumerate} \\
+
+
+DFS dapat digambarkan dengan \textit{pseudo-code} berikut \cite{stima-graph-1},
+\begin{algorithm}[H]
+    \caption{Mengunjungi seluruh simpul graf dengan DFS} \label{alg:dfs}
+    \begin{algorithmic}
+        \Require Tabel boolean $visited$ telah diinisalisasi dan dapat diakses
+        \Statex
+
+        \Procedure{DFS}{$v$}
+            \State \textbf{Input:} \; $v$: simpul yang dikunjungi saat ini
+            \Statex
+
+            \State \Call{Process}{$v$} \Comment{Proses simpul sesuai kebutuhan}
+            \For{$u \in $ \Call{neighbour}{$v$}}
+                \If{\textbf{not} $visited[u]$}
+                    \State \Call{DFS}{$u$}
+                \EndIf
+            \EndFor
+
+        \EndProcedure
+    \end{algorithmic}
+\end{algorithm} \\
+
+Simpul-simpul yang dikunjungi pada traversal graf secara DFS dapat digambarkan sebagai pohon, dinamakan pohon DFS \cite{stima-graph-1}. \\
+
+Depth First search dapat menemukan jalur dengan jarak terpendek khusus untuk graf berbentuk pohon (karena hanya ada satu kemungkinan jalur antar simpul) \cite{cp-dfs}. \\
+
+Depth First Search memiliki properti berikut \cite{stima-graph-1} \cite{cp-dfs},
+\begin{itemize}
+    \item Completeness? Ya (selama nilai \textit{branching factor} terbatas)
+    \item Optimality? Tidak
+    \item Kompleksitas waktu: $O(b^m)$ atau $O(m + n)$ dengan $b$ \textit{branching factor}, $m$ jumlah simpul, dan $n$ jumlah sisi
+    \item Kompleksitas ruang: $O(bm)$ atau $O(m)$ dengan $b$ \textit{branching factor}, $m$ jumlah simpul
+    \item Memiliki heuristik untuk kurang baik dalam kompleksitas waktu tetapi lebih baik dalam kompleksitas ruang
+    \item Efisien tetapi tidak menjamin solusi dengan langkah minimum pada graf umum
+\end{itemize} \\
+
+DFS dapat memilih langkah yang salah, sehingga path panjang bahkan \textit{infinite}. Pemilihan langkah sangat penting sehingga dapat dikembangkan teknik pencarian khusus
+seperti Depth Limited Search (DLS) dan Iterative Deepening Search (IDS) \cite{stima-graph-2}. \\
+
+Depth Limited Search yaitu melakukan DFS dengan syarat tambahan, \textit{backtrack} harus dilakukan jika telah mencapai suatu jarak $n$ dari simpul awal. 
+Sedangkan Iterative Deepening Search yaitu melakukan DLS
+dengan jarak $n$ yang diatur menaik secara iteratif sampai solusi ditemukan \cite{stima-graph-2}. \\
+
+DLS dapat digambarkan dengan \textit{pseudo-code} berikut ini \cite{stima-graph-2},
+\begin{algorithm}[H]
+    \caption{Mengunjungi seluruh simpul graf dengan DLS} \label{alg:dls}
+    \begin{algorithmic}
+        \Require Tabel boolean $visited$ telah diinisalisasi dan dapat diakses
+        \Statex
+
+        \Function{DLS}{$v$, $limit$}
+            \State \textbf{Input:} \; $v$: simpul yang dikunjungi saat ini
+            \State \qquad \qquad $limit$: batas kedalaman maksimal dari simpul awal
+            \State \textbf{Output:} solusi dari permasalahan jika ditemukan
+            \Statex
+
+            \State $result \gets $ \Call{Process}{$v$} \Comment{Proses simpul sesuai kebutuhan}
+            \If{$result = $ \textbf{success}}
+                \State \Return $result$
+            \EndIf
+
+            \Statex
+
+            \For{$u \in $ \Call{neighbour}{$v$}}
+                \If{\textbf{not} $visited[u]$ \textbf{and} \Call{depth}{u} $ \leq limit$}
+                    \State $result \gets $ \Call{DLS}{$u$}
+                    \If{$result = $ \textbf{success}}
+                        \State \Return $result$
+                    \EndIf
+                \EndIf
+            \EndFor
+
+        \EndFunction
+    \end{algorithmic}
+\end{algorithm} \\
+
+DLS memiliki properti sebagai berikut \cite{stima-graph-2}, 
+\begin{itemize}
+    \item Completeness? Tidak
+    \item Optimality? Tidak
+    \item Kompleksitas waktu: $O(b^n)$, dengan $b$ \textit{branching factor} dan $n$ batas jarak
+    \item Kompleksitas ruang: $O(bn)$, dengan $b$ \textit{branching factor} dan $n$ batas jarak.
+\end{itemize} \\
+
+IDS dijalankan melalui fungsi $DLS$ dari algoritma \ref{alg:dls}. IDS dapat digambarkan melalui \textit{pseudo-code} berikut ini \cite{stima-graph-2},
+\begin{algorithm}[H]
+    \caption{Mengunjungi seluruh simpul graf dengan IDS} \label{alg:ids}
+    \begin{algorithmic}
+        \Require Tabel boolean $visited$ telah diinisalisasi dan dapat diakses
+        \Statex
+
+        \Function{IDS}{$v$, $limit$}
+            \State \textbf{Input:} \; $v$: simpul awal yang akan dikunjungi
+            \State \qquad \qquad $limit$: batas kedalaman maksimal dari simpul awal
+            \State \textbf{Output:} solusi dari permasalahan jika ditemukan
+            \Statex
+
+            \State $i \gets 0$
+            \State $result \gets $ \Call{DLS}{$v$, $i$}
+            \While{$i+1 \leq limit$ \textbf{and} $result \neq$ \textbf{success}}
+                \State $i \gets i+1$
+                \State $result \gets $ \Call{DLS}{$v$, $i$}
+            \EndWhile
+            \State \Return{$result$}
+        \EndFunction
+    \end{algorithmic}
+\end{algorithm} \\
+
+
+IDS memiliki propooerti sebagai berikut \cite{stima-graph-2},
+\begin{itemize}
+    \item Completeness? Ya, jika $b$ terbatas
+    \item Optimality? Ya, jika langkah sama dengan biaya
+    \item Kompleksitas waktu: $O(b^d)$, dengan $b$ \textit{branching factor} dan $d$ kedalaman dari solusi terbaik
+    \item Kompleksitas ruang: $O(bd)$, dengan $b$ \textit{branching factor} dan $d$ kedalaman dari solusi terbaik
+\end{itemize} \\
+
+
+\subsubsection{Breadth First Search}
+
+Breadth First Search adalah teknik pencarian graf secara mendalam yang dapat digambarkan dengan algoritma berikut ini (traversal dimulai dari simpul $v$),
+\begin{enumerate}
+    \item Kunjungi simpul $v$
+    \item Kunjungi semua simpul yang bertetangga dengan simpul $v$ terlebih dahulu.
+    \item Kunjungi simpul berikutnya yang belum dikunjungi namun bertetangga dengan simpul-simpul yang telah dikunjungi, demikian seterusnya.
+\end{enumerate} \\
+
+Breadth First Search dapat menemukan jalur terpendek pada graf umum dengan syarat graf tersebut merupakan graf tidak berbobot \cite{cp-bfs}. \\
+
+Simpul-simpul yang dikunjungi pada traversal graf secara BFS dapat digambarkan sebagai pohon, dinamakan pohon BFS \cite{stima-graph-1}. \\
+
+Untuk melakukan BFS, diperlukan beberapa struktur data \cite{stima-graph-1}:
+\begin{enumerate}
+    \item Matriks ketetanggaan $A = [a_{ij}]$ yang berukuran $n \times n$,
+    \begin{itemize}
+        \item $a_{ij} = 1$, jika simpul $i$ dan simpul $j$ bertetangga,
+        \item $a_{ij} = 0$, jika simpul $i$ dan simpul $j$ tidak bertetangga.
+    \end{itemize}
+    \item Antrian $q$ untuk menyimpan simpul yang telah dikunjungi.
+    \item Tabel boolean untuk melacak simpul yang telah dikunjungi,
+    \begin{itemize}
+        \item $visited : array[l..n]$ of boolean
+        \item $visited[i] = true$ jika simpul $i$ sudah dikunjungi
+        \item $visited[i] = false$ jika simpul $i$ belum dikunjung.
+    \end{itemize}
+\end{enumerate} \\
+
+
+BFS dapat digambarkan dengan \textit{pseudo-code} berikut \cite{stima-graph-1},
+\begin{algorithm}[H]
+    \caption{Mengunjungi seluruh simpul graf dengan BFS} \label{alg:bfs}
+    \begin{algorithmic}
+        \Require Tabel boolean $visited$ telah diinisalisasi dan dapat diakses
+        \Require Struktur data antrian simpul $Q$ yang terinisalisasi dan kosong
+        \Statex
+
+        \Procedure{BFS}{$v$}
+            \State \textbf{Input:} \; $v$: simpul awal yang dikunjungi
+            \Statex
+
+            \While{\textbf{not} \Call{Empty}{$Q$}}
+                \State $x \gets $ \Call{Pop}{$Q$} 
+                \For{$y \in $ \Call{neighbour}{$x$}}
+                    \If{\textbf{not} $visited[y]$}
+                        \State \Call{Process}{$y$} \Comment{Proses simpul sesuai kebutuhan}
+                        \State \Call{Push}{$Q$, $y$}
+                    \EndIf
+                \EndFor
+            \EndWhile
+
+        \EndProcedure
+    \end{algorithmic}
+\end{algorithm} \\
+
+
+Selain itu, BFS juga memiliki properti-properti berikut ini \cite{stima-graph-2} \cite{cp-bfs},
+\begin{itemize}
+    \item Completeness? Ya (selama nilai b terbatas )
+    \item Optimality? Ya, jika langkah sama dengan ongkos
+    \item Kompleksitas waktu: $O(b^d)$ atau $O(m + n)$ dengan $b$ \textit{branching factor}, $d$ kedalaman dari solusi terbaik, $m$ jumlah simpul dan $n$ jumlah sisi.
+    \item Kompleksitas ruang: $O(b^d)$ atau $O(m)$ dengan $b$ \textit{branching factor}, $d$ kedalaman dari solusi terbaik, dan $m$ jumlah simpul
+    \item Memiliki heuristik untuk kurang baik dalam kompleksitas ruang.
+\end{itemize} \\
+
+\subsection{Lowest Common Ancestor}
+
+Misalnya $G = (V, E)$ adalah sebuah graf berbentuk tree dengan $V$ adalah himpunan simpul dan $E$ adalah himpunan sisi,
+akar dari $G$ adalah suatu simpul tertentu yang dipilih sebagai simpul paling atas dengan \textit{depth} bernilai nol,
+semua simpul lain pada $G$ akan memiliki \textit{depth} yang didefinisikan sebagai jarak DFS dari simpul tersebut ke simpul akar \cite{cp-lca}. \\
+
+Dapat didefinisikan sebuah \textit{ancestor} dari simpul $v \in V$ sebagai semua simpul pada jalur dari akar $G$ ke simpul $v$ (termasuk simpul akar dan simpul $v$ itu tersendiri) \cite{cp-lca}. \\
+
+Misal terdapat simpul $u, v \in V$ dan $S$ adalah himpunan seluruh simpul yang merupakan \textit{ancestor} dari $u$ dan \textit{ancestor} dari $v$,
+Lowest Common Ancestor (LCA) dari pasangan simpul $(u, v)$ adalah sebuah simpul $w \in S$ dengan \textit{depth} terbesar 
+(dengan kata lain, memiliki posisi "terbawah" atau paling jauh dari akar) \cite{cp-lca}. \\
+
+Sebagai contoh, \\
+
+$G: $
+\begin{center}
+    \begin{forest}
+        for tree={circle, draw, align=center}
+        [
+            1
+            [2
+                [7
+                    [9]
+                    [10]
+                ]
+                [8]
+            ]
+            [3
+                [4]
+                [5]
+                [6]
+            ]
+        ]
+    \end{forest}
+    \begin{itemize}
+        \item $LCA(8, 9) = 2$
+        \item $LCA(4, 6) = 3$
+        \item $LCA(2, 7) = 2$
+        \item $LCA(5, 5) = 5$
+        \item $LCA(6, 10) = 1$
+    \end{itemize} 
+\end{center} \\
+
+
+Permasalahan pencarian LCA dapat direduksi menjadi permasalahan Range Minimum Query (RMQ) yang juga merupakan salah satu permasalahan klasik dalam Strategi Algoritma \cite{cp-rmq}.
+Selain itu ada banyak teknik untuk mencari solusi LCA, diantaranya yaitu \cite{cp-lca}:
+\begin{itemize}
+    \item Bruteforce Naif
+    \item DFS dengan dua pointer
+    \item Binary Lifting
+    \item Algoritma Farach-Colton and Bender
+    \item Algoritma Offline Tarjan
+\end{itemize} \\
+
+\subsection{Binary Lifting}
+
+Misalnya $G = (V, E)$ adalah sebuah graf berbentuk tree dengan $V$ adalah himpunan simpul, $E$ adalah himpunan sisi dan $N$ adalah banyaknya simpul pada $G$. \\
+
+Binary Lifting adalah teknik efisien untuk menemukan \textit{ancestor} ke-$k$ ($k \geq 0$) dari setiap simpul $v \in V$ menggunakan paradigma \textit{dynamic programming}.
+Teknik ini dilakukan dengan melakukan prekomputasi setiap \textit{ancestor} ke-$i$ ($i \in \{ 2^0, 2^1, \dots, 2^{\lceil \log N \rceil} \}$) dari setiap simpul $v \in V$
+yang dapat dilakukan menggunakan DFS dalam kompleksitas waktu $O(N \log N)$, kemudian setiap query untuk mencari \textit{ancestor} ke-$k$ dari sebuah simpul $v$ 
+akan bisa dijawab dalam kompleksitas waktu $O(\log k)$ \cite{cp-cses-book}. \\
+
+Implementasi Binary Lifting dapat dilakukan menggunakan struktur data \cite{cp-cses-book},
+\begin{center}
+    $ancestor[1..N][0..\lceil \log N \rceil]$: array of array of nodes
+\end{center}
+
+Misalkan terdapat suatu simpul $v$ yang memiliki \textit{parent} $p$. Relasi rekurens yang dapat digunakan untuk melakukan prekomputasi pada $v$ yaitu \cite{cp-binlift},
+\[ 
+ancestor[v][i] = 
+\begin{cases} 
+    p & i = 0 \\
+    ancestor[ancestor[v][i-1]][i-1] & i > 0 \\
+\end{cases}
+\]
+
+Prekomputasi harus dilakukan pada setiap simpul $v$ di $G$ dan 
+harus dipastikan bahwa sebelum melakukan prekomputasi pada suatu simpul, semua \textit{ancestor} simpul tersebut harus sudah di-prekomputasi (jika tidak, maka nilai prekomputasi untuk simpul tersebut tidak benar),
+sehingga cocok untuk menggunakan DFS untuk traversal yang digunakan.
+Program prekomputasi dan pencarian \textit{ancestor} ke-$k$ dapat digambarkan melalui \textit{pseudo-code} berikut ini \cite{cp-binlift} \cite{cp-cses-book},
+
+\begin{algorithm}[H]
+    \caption{Prekomputasi pada Binary Lifting} \label{alg:binlift-precompute}
+    \begin{algorithmic}
+        \Procedure{DFS\_Precompute}{$v$, $p$, $ancestor$, $N$}
+            \State \textbf{Input:} \; $v$: simpul yang dikunjungi saat ini
+            \State \qquad \qquad $p$: \textit{parent} dari $v$
+            \State \qquad \qquad $ancestor$: tabel prekomputasi setiap simpul
+            \State \qquad \qquad $N$: jumlah simpul pada tree
+            \Statex
+        
+            \State $ancestor[v][0] = p$
+            \For{$i \gets 1$ to $\lceil \log N \rceil$}
+                \State $ancestor[v][i] = ancestor[ancestor[v][i-1]][i-1]$
+            \EndFor
+            
+            \Statex
+
+            \For{$u \in $ \Call{neighbour}{$v$}}
+                \If{$u \neq p$}
+                    \State \Call{DFS\_Precompute}{$u$, $v$, $ancestor$} 
+                \EndIf
+            \EndFor
+
+        \EndProcedure
+
+        \Statex
+
+        \Procedure{Precompute}{$tree$, $ancestor$}
+            \State \textbf{Input:} \; $tree$: tree yang akan di-prekomputasi
+            \State \qquad \qquad $ancestor$: tabel prekomputasi setiap simpul
+            \Statex
+
+            \State $root \gets $ \Call{GetRoot}{$tree$}
+            \State $N \gets $ \Call{GetNodesCount}{$tree$}
+            \State \Call{DFS\_Precompute}{$root$, $root$, $ancestor$, $N$}
+            \Comment{Akar tree dianggap \textit{parent}-nya sendiri}
+        \EndProcedure
+    \end{algorithmic}
+\end{algorithm}
+
+
+\begin{algorithm}[H]
+    \caption{Teknik Binary Lifting untuk menemukan \textit{ancestor} ke-$k$ suatu simpul} \label{alg:kth-ancestor}
+    \begin{algorithmic}
+
+        \Require tabel prekomputasi simpul telah diisi dan berupa variabel global $ancestor$
+        \Require jumlah simpul dalam tree berupa variabel global $N$
+        \Statex
+
+        \Function{kth\_ancestor}{$v$, $k$}
+            \State \textbf{Input:} \; $v$: simpul yang akan dicari simpul \textit{ancestor}-nya
+            \State \qquad \qquad $k$: jarak ke simpul \textit{ancestor} yang dicari
+            \State \textbf{Output:} simpul yang merupakan \textit{ancestor} ke-$k$ dari $v$
+            \Statex
+
+            \State $u \gets v$
+            \For{$i \gets 0$ to $\lceil \log N \rceil$}
+                \If{bit ke-$i$ dihitung dari Least Signficant Bit pada $k$ bernilai $1$}
+                    \State $u \gets ancestor[u][i]$
+                \EndIf
+            \EndFor
+            \State \Return $u$
+
+        \EndFunction
+
+    \end{algorithmic}
+\end{algorithm} \\
+
+Perhatikan bahwa Binary Lifting memiliki kompleksitas memori sebesar $O(N \log N)$.
+
+\subsubsection{Pemanfaatan Binary Lifting pada LCA}
+
+Binary Lifting dapat digunakan sebagai salah satu teknik dalam mencari solusi LCA yang efisien.
+Setelah prekomputasi Binary Lifting dilakukan, sebuah kuery LCA dapat dihitung dalam kompleksitas waktu $O(\log N)$ \cite{cp-binlift}. \\
+
+Misal terdapat kueri untuk menemukan $LCA(x, y)$, 
+dengan memakai fungsi $\linebreak kth\_ancestor(x, k)$ yang telah dijelaskan pada Algoritma \ref{alg:kth-ancestor}, 
+kita dapat  dilakukan langkah-langkah algoritmik berikut untuk menemukan LCA \cite{cp-cses-book}:
+\begin{enumerate}
+    \item Asumsikan $depth(x) >= depth(y)$, jika tidak maka kembalikan hasil $LCA(y, x)$ (hasil akan identik)
+    \item Ambil $k = depth(x) - depth(y)$ dan $x = kth\_ancestor(x, k)$, dengan kata lain kita akan "menaikkan" $x$ sehingga $x$ dan $y$ berada pada \textit{depth} yang sama
+    \item Jika $x = y$ maka kembalikan simpul $x$ sebagai hasil kueri, jika tidak maka pergi ke langkah selanjutnya
+    \item Ambil $S = \{ 2^j \mid 2^j \leq depth(x), j \in \{0, 1, 2, \dots \} \}$,
+    Mulai dari nilai $i \in S$ yang terbesar hingga terkecil lakukan:
+    Jika $kth\_ancestor(x, i) \neq kth\_ancestor(y, i)$ maka ambil $x = kth\_ancestor(x, i)$ dan $y = kth\_ancestor(y, i)$
+    (Dengan kata lain, kita "menaikkan" $x$ dan $y$ bersamaan selama hasil "penaikkan" itu tidak menghasilkan $x = y$)
+    \item Sampai tahap ini, $x$ dan $y$ berada pada posisi "paling atas" sehingga $x \neq y$, 
+    karena suatu simpul hanya memiliki satu \textit{parent} maka akibatnya $parent(x) = parent(y) = LCA(x, y)$.
+    Kembalikan simpul $kth\_ancestor(x, 0)$ sebagai hasil kueri.
+\end{enumerate} \\
+
+
+Untuk lebih jelasnya, LCA menggunakan Binary Lifting dapat dipaparkan melalui \textit{pseudo-code} berikut \cite{cp-cses-book},
+\begin{algorithm}[H]
+    \caption{Solusi kueri LCA menggunakan teknik Binary Lifting} \label{alg:lca-binlift}
+    \begin{algorithmic}
+        \Require tabel prekomputasi simpul telah diisi dan berupa variabel global $ancestor$
+        \Require jumlah simpul dalam tree berupa variabel global $N$
+        \Statex
+
+        \Function{LCA}{$x$, $y$}
+            \State \textbf{Input:} \; $x$: simpul pertama yang akan dicari LCA-nya
+            \State \qquad \qquad $y$: simpul kedua yang akan dicari LCA-nya
+            \State \textbf{Output:} simpul yang merupakan $LCA(x, y)$
+            \Statex
+
+            \If{\Call{depth}{x} $ < $ \Call{depth}{y}}
+                \State \Return \Call{LCA}{$y$, $x$}
+            \EndIf
+            
+            \Statex
+
+            \State $k \gets $ \Call{depth}{x} $ - $ \Call{depth}{y}
+            \State $z \gets $  \Call{kth\_ancestor}{$x$, $k$}
+            \If{$z = y$}
+                \State \Return $z$
+            \EndIf
+
+            \Statex
+
+            \For{$i \gets \lceil \log N \rceil$ to $0$}
+                \If{$i \leq $ \Call{depth}{z} \textbf{and} \Call{kth\_ancestor}{$y$, $i$} $\neq$  \Call{kth\_ancestor}{$z$, $i$}}
+                    \State $y \gets $ \Call{kth\_ancestor}{$y$, $i$}
+                    \State $z \gets $ \Call{kth\_ancestor}{$z$, $i$}
+                \EndIf
+            \EndFor
+            \State \Return \Call{kth\_ancestor}{$z$, $0$}
+        \EndFunction
+
+    \end{algorithmic}
+\end{algorithm} \\
+
+
+\subsection{HTML DOM Tree}
+
+\subsection{CSS Selector}
+
+\subsection{Client-Server Architecture}
+
+\subsection{Parallel Computing}
+
+\subsection{Containerization}
+
+\subsection{Virtual Machine}
+
+
 \pagebreak
+
 
 \section{Aplikasi DFS dan BFS}
 
@@ -194,11 +723,32 @@ Selain itu terdapat spesifikasi bonus tugas besar (opsional) dengan poin tambaha
 
 \begin{thebibliography}{}
 
-\bibitem{munir-graph-1}
-Rinaldi Munir (2026), \texit{Breadth/Depth First Search (BFS/DFS) (Bagian 1)}, https://informatika.stei.itb.ac.id/~rinaldi.munir/Stmik/2025-2026/13-BFS-DFS-(2026)-Bagian1.pdf
+\bibitem{stima-graph-1}
+Rinaldi Munir (2026), \textit{Breadth/Depth First Search (BFS/DFS) (Bagian 1)}, \url{https://informatika.stei.itb.ac.id/~rinaldi.munir/Stmik/2025-2026/13-BFS-DFS-(2026)-Bagian1.pdf}
 
-\bibitem{munir-graph-2}
-Rinaldi Munir (2026), \texit{Breadth/Depth First Search (BFS/DFS) (Bagian 2)}, https://informatika.stei.itb.ac.id/~rinaldi.munir/Stmik/2025-2026/14-BFS-DFS-(2026)-Bagian2.pdf
+\bibitem{stima-graph-2}
+Rinaldi Munir (2026), \textit{Breadth/Depth First Search (BFS/DFS) (Bagian 2)}, \url{https://informatika.stei.itb.ac.id/~rinaldi.munir/Stmik/2025-2026/14-BFS-DFS-(2026)-Bagian2.pdf}
+
+\bibitem{cp-dfs}
+\url{https://cp-algorithms.com/graph/depth-first-search.html}
+
+\bibitem{cp-bfs}
+\url{https://cp-algorithms.com/graph/breadth-first-search.html}
+
+\bibitem{cp-lca}
+\url{https://cp-algorithms.com/graph/lca.html}
+
+\bibitem{cp-rmq}
+\url{https://cp-algorithms.com/graph/rmq_linear.html}
+
+\bibitem{cp-binlift}
+\url{https://cp-algorithms.com/graph/lca_binary_lifting.html}
+
+\bibitem{cp-cses-book}
+\url{https://cses.fi/book/book.pdf}
+
+% TODO: fix URL bibliography format later
+
 
 \end{thebibliography}
 
@@ -295,20 +845,7 @@ Tugas ini disusun sepenuhnya tanpa bantuan kecerdasan buatan (\textit{Generative
     \end{tabular}
 \end{table}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 \pagebreak
+
 
 \end{document}
