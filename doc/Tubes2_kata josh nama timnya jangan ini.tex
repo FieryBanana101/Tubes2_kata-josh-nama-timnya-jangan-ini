@@ -682,16 +682,153 @@ Untuk lebih jelasnya, LCA menggunakan Binary Lifting dapat dipaparkan melalui \t
 
 \subsection{CSS Selector}
 
+
 \subsection{Client-Server Architecture}
+
+Arsitektur Client-Server adalah istilah umum yang biasa digunakan dalam arsitektur sistem modern untuk mendeskripsikan
+arsitektur aplikasi yang membagi pemrosesan ke dalam lebih dari satu proses dan umumnya juga dalam perangkat keras yang berbeda \cite{client-server}. \\
+
+Pembagian tersebut dilakukan berdasarkan spesialisasi dan kebutuhan, misalnya Web Browser (client) akan menampilkan antarmuka
+sedangkan Webserver (Server) akan melakukan manajemen \textit{networking} dan menjamin penyaluran data. \cite{client-server} \\
+
+Salah satu contoh arsitektur Client-Server yang paling sederhana yaitu \textit{two-tier architecture}. 
+Arsitektur jenis ini umumnya memberikan antarmuka sederhana bagi pengguna untuk mendapatkan informasi yang tersentralisasi
+tanpa memberikan interpretasi data atau pemrosesan data yang intensif. Contoh aplikasi yang memakai arsitektur ini yaitu \cite{client-server},
+\begin{itemize}
+    \item \textbf{Email}
+    \item \textbf{Telnet}
+    \item \textbf{FTP} (File Transfer Protocol)
+    \item \textbf{Gopher}
+    \item \textbf{Web}.
+\end{itemize} \\
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=8cm, height=5cm]{section2-two-tier.png}
+    \caption{Ilustrasi sistem \textit{two-tier architecture}}
+    \label{fig:section2-two-tier}
+\end{figure}
+
+Arsitektur dengan tipe \textit{two-tier architecture} juga memiliki limitasi yang perlu dipikirkan oleh arsitek sistem \cite{client-server},
+\begin{enumerate}
+    \item \textbf{Fat Clients}, yaitu permasalahan dimana dengan semakin berkembangnya teknologi maka fungsionalitas client
+    akan berkembang sangat kompleks sehingga Server tidak bisa mengikuti perkembangan dengan baik
+    \item \textbf{Object Reuse}, yaitu penggunaan data tersentralisasi yang "diulangi" sehingga terdapat duplikat dan
+    akibatnya akan sulit menjaga integritas data, hal ini sering terjadi karena fungsionalitas antar komponen pada sistem
+    \textit{two-tier} yang berbeda cenderung mirip.
+\end{enumerate} \\
+
+Untuk meningkatkan desain sistem, dapat digunakan \textit{three-tier architecture} yang mengisolasikan pemrosesan data
+pada suatu lapisan baru yang berbeda dengan lapisan inti program. Lapisan tersebut biasanya disebut sebagai lapisan basis data. \cite{client-server} \\
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=12cm, height=6cm]{section2-three-tier.png}
+    \caption{Ilustrasi sistem \textit{three-tier architecture}}
+    \label{fig:section2-three-tier}
+\end{figure}
+
+
+
 
 \subsection{Parallel Computing}
 
-\subsection{Containerization}
+Paradigma komputasi parallel (\textit{parallel computing}) adalah teknik komputasi dengan cara menggunakan lebih dari satu sumber daya komputasi di saat yang bersamaan. 
+Paradigma ini dapat digunakan untuk menyelesaikan masalah dengan cara memecah permasalahan menjadi upa-permasalahan lebih kecil yang independen satu sama lain dan hasilnya dapat digabungkan menjadi solusi global, 
+kemudian upa-permasalahan dibagi kepada sumber daya komputasi berbeda, dan penemuan solusi dilakukan bersamaan dengan teknik sinkronisasi tertentu \cite{parallel-comp}. \\
 
-\subsection{Virtual Machine}
+Kemampuan komputasi parallel dapat dihasilkan dengan beberapa cara misalnya \cite{parallel-comp},
+\begin{itemize}
+\item Lebih dari satu unit fungsional (cache L1, cache L2, cabang, prefetch, decode, floating-point, pemrosesan grafis (GPU), integer, dll.)
+\item Lebih dari satu unit/\textit{core} eksekusi
+\item Lebih dari satu \textit{core} perangkat keras
+\item Jaringan komputer yang terdiri dari banyak komputer dan berdiri sendiri untuk membuat cluster komputer parallel yang lebih besar.
+\end{itemize}
 
+Aplikasi komputasi parallel dalam suatu perangkat keras merupakan tanggung jawab sistem operasi perangkat keras tersebut. 
+Umumnya sistem operasi akan mengimplementasikan mekanisme \textit{context switching} yang dapat memberikan manfaat \textit{concurrency} dan \textit{parallellism}. 
+\textit{Concurrency} yaitu kemampuan untuk mengerjakan banyak proses dalam waktu yang sama dengan cara berganti proses secara cepat, tanpa sumber daya komputasi tambahan. 
+Sedangkan \textit{Parallelism} adalah kemampuan untuk mengerjakan banyak proses dalam waktu yang sama dengan cara menggunakan sumber daya komputasi lainnya secara maksimal. \cite{parallel-comp} \cite{os-book} \\
+
+Aplikasi \textit{parallel computing} yaitu \textit{parallel programming}. 
+Dalam pembuatan program komputer modern, unit terkecil eksekusi yang biasa digunakan yaitu \textit{thread}, kumpulan \textit{thread} yang memiliki ruang memori yang sama akan membentuk \textit{process}. 
+Penggunaan \textit{multi-threading} dibandingkan \textit{multi-processing} lebih diutamakan karena, \textit{context switch} antar \textit{thread} lebih murah secara komputasional. 
+Selain itu \textit{thread} juga saling berbagi bagian data \textit{heap} dan \textit{global} sehingga dapat lebih mudah untuk sinkronisasi. \cite{os-book} \\
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{section2-thread.png}
+    \caption{Ilustrasi \textit{multi-threading} pada komputer}
+    \label{fig:section2-thread}
+\end{figure}
+
+
+Sinkronisasi perlu dilakukan antar unit eksekusi yang saling berbagi data pada alamat memori yang sama, jika tidak maka akan terjadi \textit{race condition}. 
+Teknik sinkronisasi yang dapat dilakukan antar unit eksekusi yaitu diantaranya \cite{parallel-comp},
+\begin{itemize}
+    \item \textbf{Barrier}, sebuah unit komputasi akan melakukan sebuah pekerjaan hingga mencapai suatu "batasan" dan akan berhenti
+    \item \textbf{Lock / semaphore}, digunakan untuk melindungi data global dengan mekanisme kunci sehingga hanya satu unit komputasi yang bisa memodifikasi data pada suatu waktu
+    \item \textbf{Synchronous communication operations}, unit komputasi saling berkomunikasi satu sama lain untuk menyelesaikan pekerjaan tertentu
+\end{itemize} \\
+
+
+\subsection{Virtualisasi dan Kontainerisasi}
+
+Virtualisasi adalah teknik mengabstraksi dan mengatur sumber daya dari perangkat keras sehingga perangkat lunak mendapat sumber daya virtual dibanding sumber daya asli.
+Fitur sistem operasi yang dapat mem-virtualisasikan sumber daya seperti fitur \textit{time-sharing} dan \textit{virtual memory},
+menginisasikan munculnya teknologi virtualisasi dengan \textit{hypervisor}. Hasilnya, muncullah teknologi \textit{virtual machine}
+yang memungkinkan manajemen lebih dari satu sistem operasi pada suatu mesin \cite{virt-cont}. \\
+
+Teknologi virtualisasi memberikan keuntungan yang besar karena berhasil meningkatkan nilai perangkat keras. 
+Sehingga pada awalnya menjadi \textit{state-of-the-art} dalam urusan \textit{deployment and operation}.
+Tetapi teknologi virtualisasi dengan \textit{hypervisor} memakan banyak memori dan memiliki \textit{overhead}
+dari manajemen banyak sistem operasi, sehingga dikembangkan teknologi kontainerisasi \cite{docker}. \\
+
+Kontainerisasi adalah cara virtualisasi yang lebih ringan dan cepat, dengan cara menggabungkan seluruh kode dan data
+yang berkaitan ke dalam suatu proses tertentu yang akan mengatur isolasi menggunakan fitur dari sistem operasi \textit{host}.
+Pada dasarnya, sistem operasi \textit{host} tersebut-lah yang harus memberikan antarmuka untuk mengisolasi sumber daya \cite{virt-cont}. \\
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=13cm, height=6cm]{section2-virt.png}
+    \caption{Ilustrasi virtualisasi dan kontainerisasi}
+    \label{fig:section2-virt}
+\end{figure} \\
+
+Spesifikasi kontainerisasi diatur oleh OCI (Open Container Initiative). 
+Salah satu teknologi kontainerisasi yang banyak digunakan yaitu Docker Engine yang memiliki tujuan untuk memudahkan pembuatan kontainer menggunakan \textit{image}.
+Arsitektur Docker Engine sangat modular dan terdiri dari lapisan-lapisan \cite{docker}:
+\begin{enumerate}
+    \item \textbf{Docker client}, antarmuka bagi pengguna untuk menjalankan fitur Docker Engine (biasanya melalui CLI)
+    \item \textbf{Docker daemon}, menerima \textit{request} dari Docker Client dan meneruskannya melalui API ke komponen lain
+    \item \textbf{containerd}, proses modular yang mengatur daur hidup dari sebuah kontainer
+    \item \textbf{shim}, proses yang menjaga agar integritas kontainer tetap terjaga walaupun terjadi masalah dengan Docker ataupun containerd
+    \item \textbf{runc}, proses yang memiliki tanggung jawab untuk membuat kontainer berdasarkan spesifikasi OCI dan mengakses primitif isolasi dari fitur sistem operasi
+\end{enumerate} \\
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=6cm]{section2-docker.png}
+    \caption{Ilustrasi arsitektur Docker Engine}
+    \label{fig:section2-docker}
+\end{figure} \\
+
+Docker Engine menggunakan sebuah format \textit{image} untuk mendeskripsikan sebuah kontainer. 
+Template tersebut akan diinterpretasikan oleh Docker Engine menjadi beberapa lapisan \texit{read-only} yang modular.
+Lapisan-lapisan tersebut didesain sesuai spesifikasi OCI dan akan menjadi bahan bagi \textbf{runc} untuk membuat \textit{runtime} kontainer \cite{docker}. \\
+
+Untuk membuat sebuah Docker Image, beberapa contoh perintah primitif yang dapat digunakan yaitu \cite{docker}:
+\begin{itemize}
+    \item \textbf{FROM}: untuk menggunakan basis lapisan untuk image saat ini
+    \item \textbf{RUN}: untuk menjalankan eksekusi proses tertentu saat proses pembuatan kontainer
+    \item \textbf{COPY}: untuk menyalin file tertentu dari \textit{host} ke kontainer saat proses pembuatan kontainer
+    \item \textbf{WORKDIR}: untuk menentukan \textit{working directory} proses utama kontainer
+    \item \textbf{EXPOSE}: untuk menentukan nomor \textit{port} yang di-ekspos dari \textit{network namespace} kontainer ke \textit{host} 
+    \item \textbf{CMD}: untuk menentukan \textit{command} eksekusi program yang akan menjadi proses utama dari kontainer
+dan lain sebagainya. \\
 
 \pagebreak
+
 
 
 \section{Aplikasi DFS dan BFS}
@@ -746,6 +883,22 @@ Rinaldi Munir (2026), \textit{Breadth/Depth First Search (BFS/DFS) (Bagian 2)}, 
 
 \bibitem{cp-cses-book}
 \url{https://cses.fi/book/book.pdf}
+
+\bibitem{parallel-comp}
+\url{https://hpc.llnl.gov/documentation/tutorials/introduction-parallel-computing-tutorial}
+
+\bibitem{os-book}
+the os book from univ
+
+\bibitem{client-server}
+\url{https://web.archive.org/web/20110406121920/http://java.sun.com/developer/Books/jdbc/ch07.pdf}
+
+\bibitem{docker}
+\url{https://ebooks.karbust.me/Technology/Docker%20Deep%20Dive%20-%20Nigel%20Poulton.pdf}
+
+\bibitem{virt-cont}
+\url{https://unitesi.unive.it/retrieve/cc1c017f-1a66-443d-b375-a0adc1e0fba1/815635-84509.pdf}
+
 
 % TODO: fix URL bibliography format later
 
