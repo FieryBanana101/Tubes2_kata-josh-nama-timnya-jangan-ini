@@ -3,8 +3,8 @@ use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use web_sys::{Document, Element, HtmlElement};
 use yew::prelude::*;
 
-use crate::web::js_util::*;
-use crate::web::bindings::{alert, d3_hierarchy, d3_tree};
+use crate::js_util::*;
+use crate::bindings::{alert, d3_hierarchy, d3_tree};
 
 const TREE_CONTAINER_ID: &str = "graph";
 const SVG_NS_URL: &str = "http://www.w3.org/2000/svg";

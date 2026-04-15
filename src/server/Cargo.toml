@@ -1,0 +1,9 @@
+[package]
+name = "Tubes2_kata-josh-nama-timnya-jangan-ini_Server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actix-cors = "0.7.1"
+actix-web = "4.13.0"
+serde = { version = "1.0.228", features = ["derive"] }

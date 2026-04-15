@@ -1,12 +1,11 @@
 use gloo_net::http::Request;
 use gloo::file::callbacks::read_as_data_url;
 use gloo::file::File;
-use serde_json::json;
 use web_sys::{HtmlInputElement, js_sys::futures::spawn_local};
 use yew::prelude::*;
 use serde::Serialize;
 
-use crate::web::html_input::{HtmlInput};
+use crate::html_input::{HtmlInput};
 
 #[derive(Serialize)]
 struct QueryPostBody {
@@ -100,7 +99,7 @@ pub fn LeftSection() -> Html {
                     };
 
                     spawn_local(async move {
-                        let res = Request::post("http://localhost:8080")
+                        let res = Request::post("http://localhost:8081/query")
                             .json(&payload)
                             .expect("Failed to serialize body")
                             .send()

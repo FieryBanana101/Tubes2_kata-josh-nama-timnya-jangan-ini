@@ -1,8 +1,15 @@
 use yew::prelude::*;
 
-use crate::web::canvas_tree::CanvasTree;
-use crate::web::left_section::LeftSection;
-use crate::web::right_section::RightSection;
+mod bindings;
+mod canvas_tree;
+mod html_input;
+mod js_util;
+mod left_section;
+mod right_section;
+
+use crate::canvas_tree::CanvasTree;
+use crate::left_section::LeftSection;
+use crate::right_section::RightSection;
 
 #[component]
 fn App() -> Html {
@@ -15,6 +22,6 @@ fn App() -> Html {
     }
 }
 
-pub fn render() {
+pub fn main() {
     yew::Renderer::<App>::new().render();
 }
