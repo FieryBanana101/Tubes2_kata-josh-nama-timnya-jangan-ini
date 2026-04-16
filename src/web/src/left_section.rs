@@ -5,7 +5,7 @@ use web_sys::{HtmlInputElement, js_sys::futures::spawn_local};
 use yew::prelude::*;
 use serde::Serialize;
 
-use crate::html_input::{HtmlInput};
+use crate::{GraphContext, html_input::HtmlInput};
 
 #[derive(Serialize)]
 struct QueryPostBody {
@@ -13,11 +13,16 @@ struct QueryPostBody {
     css_query: String,
     file_payload: String,
     url_payload: String,
-    text_payload: String,   
+    text_payload: String,
+    use_dfs: bool,
 }
 
 #[component]
 pub fn LeftSection() -> Html {
+    // Context
+    let ctx = use_context::<GraphContext>().unwrap();
+
+    // Toggle Left Section
     let is_open = use_state(|| false);
     let onclick = {
         let is_open = is_open.clone();
@@ -75,7 +80,11 @@ pub fn LeftSection() -> Html {
         let text_input_ref = text_input_ref.clone();
         let input_type = input_type.clone();
         let css_query = css_query.clone();
+        let ctx = ctx.clone();
+
         Callback::from(move |_| {
+            let ctx = ctx.clone();
+
             if *has_submitted {
                 if let Some(file_input) = file_input_ref.cast::<HtmlInputElement>() {
                     file_input.set_value("");
@@ -96,6 +105,7 @@ pub fn LeftSection() -> Html {
                         file_payload: (*file_content).clone(),
                         url_payload: url_input.value(),
                         text_payload: text_input.value(),
+                        use_dfs: false,
                     };
 
                     spawn_local(async move {
@@ -106,7 +116,7 @@ pub fn LeftSection() -> Html {
                             .await
                             .unwrap();
                         if res.ok() {
-                            web_sys::console::log_1(&"Yay".into());
+                            ctx.dispatch(res.text().await.unwrap());
                         }
                     });
                 }

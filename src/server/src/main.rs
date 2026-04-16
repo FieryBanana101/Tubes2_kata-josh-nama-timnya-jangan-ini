@@ -18,22 +18,22 @@ struct QueryResponseNode {
     class: String,
     id: String,
     attributes: Vec<(String, String)>,
-    children: Vec<u32>,
+    children: Vec<i32>,
 }
 
 #[derive(Serialize,Deserialize)]
 struct ResultItem {
     query: String,
-    paths: Vec<Vec<u32>>,
-    selected: Vec<u32>,
+    paths: Vec<Vec<i32>>,
+    selected: Vec<i32>,
 }
 
 #[derive(Serialize,Deserialize)]
 struct QueryResponse {
-    root_index: u32,
+    root_index: i32,
     nodes: Vec<QueryResponseNode>,
     results: Vec<ResultItem>,
-    selected_nodes: Vec<u32>,
+    selected_nodes: Vec<i32>,
 }
 
 async fn query(body: web::Json<QueryPostBody>) -> HttpResponse {

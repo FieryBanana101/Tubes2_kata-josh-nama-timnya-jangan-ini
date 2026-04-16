@@ -5,6 +5,7 @@ use yew::prelude::*;
 
 use crate::js_util::*;
 use crate::bindings::{alert, d3_hierarchy, d3_tree};
+use crate::GraphContext;
 
 const TREE_CONTAINER_ID: &str = "graph";
 const SVG_NS_URL: &str = "http://www.w3.org/2000/svg";
@@ -18,42 +19,6 @@ const PADDING_TOP: f64 = 240.0;
 const PADDING_RIGHT: f64 = 240.0;
 const PADDING_BOTTOM: f64 = 240.0;
 const PADDING_LEFT: f64 = 240.0;
-
-const TEST_TREE_JSON: &str = r#"{
-  "root_index": 0,
-  "nodes": [
-    {
-      "tag": "html",
-      "class": "",
-      "id": "",
-      "children": [1]
-    },
-    {
-      "tag": "body",
-      "class": "page-body",
-      "id": "",
-      "children": [2, 3, 4]
-    },
-    {
-      "tag": "div",
-      "class": "meow",
-      "id": "meow1",
-      "children": []
-    },
-    {
-      "tag": "div",
-      "class": "meow meoww",
-      "id": "meow2",
-      "children": []
-    },
-    {
-      "tag": "div",
-      "class": "meow meooow",
-      "id": "meow3",
-      "children": []
-    }
-  ]
-}"#;
 
 #[derive(Clone)]
 struct RenderNode {
@@ -74,8 +39,11 @@ struct RenderLink {
 
 #[component]
 pub fn CanvasTree() -> Html {
-    use_effect_with((), move |_| {
-        render_tree(TEST_TREE_JSON);
+    let ctx = use_context::<GraphContext>().unwrap();
+
+    use_effect_with((ctx.clone()), move |ctx| {
+        let json = ctx.graph_data.clone();
+        render_tree(&json);
         || ()
     });
 
@@ -138,6 +106,23 @@ struct LayoutResult {
 }
 
 fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<LayoutResult, String> {
+    let root_index_value = Reflect::get(parsed, &JsValue::from_str("root_index"))
+        .map_err(|_| "Missing root_index.".to_string())?;
+    let root_index = root_index_value
+        .as_f64()
+        .ok_or_else(|| "root_index must be a number.".to_string())? as i32;
+    
+    if root_index == -1i32 {
+        return Ok(LayoutResult {
+            nodes: vec![],
+            links: vec![],
+            width: 0.0,
+            height: 0.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
+        });
+    }
+
     let nodes_value = Reflect::get(parsed, &JsValue::from_str("nodes"))
         .map_err(|_| "Missing nodes array.".to_string())?;
     let nodes_array = Array::from(&nodes_value);
@@ -145,17 +130,11 @@ fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<Layou
         return Err("nodes must not be empty.".to_string());
     }
 
-    let root_index_value = Reflect::get(parsed, &JsValue::from_str("root_index"))
-        .map_err(|_| "Missing root_index.".to_string())?;
-    let root_index = root_index_value
-        .as_f64()
-        .ok_or_else(|| "root_index must be a number.".to_string())? as u32;
-
-    if root_index >= nodes_array.length() {
+    if root_index >= nodes_array.length().try_into().unwrap() || root_index < 0 {
         return Err("root_index is out of range.".to_string());
     }
 
-    let root_node_data = nodes_array.get(root_index);
+    let root_node_data = nodes_array.get(root_index.try_into().unwrap());
     let nodes_for_children = nodes_array.clone();
     let children_accessor = Closure::<dyn FnMut(JsValue) -> JsValue>::new(move |node: JsValue| {
         let children_value = Reflect::get(&node, &JsValue::from_str("children"))
