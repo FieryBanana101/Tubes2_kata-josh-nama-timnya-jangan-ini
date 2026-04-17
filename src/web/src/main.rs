@@ -6,6 +6,7 @@ mod html_input;
 mod js_util;
 mod left_section;
 mod right_section;
+mod result_player;
 
 use std::rc::Rc;
 
@@ -30,14 +31,7 @@ pub type GraphContext = UseReducerHandle<Graph>;
 
 #[component]
 fn App() -> Html {
-    let empty_tree = "{
-        \"root_index\": -1,
-        \"nodes\": [],
-        \"results\": [],
-        \"selected_nodes\": []
-    }";
-
-    let graph = use_reducer(|| Graph { graph_data: empty_tree.to_string() });
+    let graph = use_reducer(|| Graph { graph_data: String::new() });
 
     html! {
         <ContextProvider<GraphContext> context={graph}>

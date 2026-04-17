@@ -1,10 +1,10 @@
-use web_sys::js_sys::{Array, Function, JSON, Reflect};
-use wasm_bindgen::{JsCast, JsValue, closure::Closure};
+use wasm_bindgen::{closure::Closure, JsCast, JsValue};
+use web_sys::js_sys::{Array, Function, Reflect, JSON};
 use web_sys::{Document, Element, HtmlElement};
 use yew::prelude::*;
 
-use crate::js_util::*;
 use crate::bindings::{alert, d3_hierarchy, d3_tree};
+use crate::js_util::*;
 use crate::GraphContext;
 
 const TREE_CONTAINER_ID: &str = "graph";
@@ -27,6 +27,7 @@ struct RenderNode {
     tag: String,
     class_name: String,
     id_attr: String,
+    node_index: i32,
 }
 
 #[derive(Clone)]
@@ -41,7 +42,7 @@ struct RenderLink {
 pub fn CanvasTree() -> Html {
     let ctx = use_context::<GraphContext>().unwrap();
 
-    use_effect_with((ctx.clone()), move |ctx| {
+    use_effect_with(ctx.clone(), move |ctx| {
         let json = ctx.graph_data.clone();
         render_tree(&json);
         || ()
@@ -61,6 +62,17 @@ fn render_tree(raw_json: &str) {
     };
     let Some(container) = document.get_element_by_id(TREE_CONTAINER_ID) else {
         return;
+    };
+
+    let raw_json = if raw_json.trim().is_empty() {
+        "{
+            \"root_index\": -1,
+            \"nodes\": [],
+            \"results\": [],
+            \"selected_nodes\": []
+        }"
+    } else {
+        raw_json
     };
 
     clear_children(&container);
@@ -111,7 +123,7 @@ fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<Layou
     let root_index = root_index_value
         .as_f64()
         .ok_or_else(|| "root_index must be a number.".to_string())? as i32;
-    
+
     if root_index == -1i32 {
         return Ok(LayoutResult {
             nodes: vec![],
@@ -137,8 +149,8 @@ fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<Layou
     let root_node_data = nodes_array.get(root_index.try_into().unwrap());
     let nodes_for_children = nodes_array.clone();
     let children_accessor = Closure::<dyn FnMut(JsValue) -> JsValue>::new(move |node: JsValue| {
-        let children_value = Reflect::get(&node, &JsValue::from_str("children"))
-            .unwrap_or(JsValue::UNDEFINED);
+        let children_value =
+            Reflect::get(&node, &JsValue::from_str("children")).unwrap_or(JsValue::UNDEFINED);
         if children_value.is_undefined() || children_value.is_null() {
             return Array::new().into();
         }
@@ -202,6 +214,7 @@ fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<Layou
         let tag = get_string_field(&data, "tag").unwrap_or_else(|| "div".to_string());
         let class_name = get_string_field(&data, "class").unwrap_or_default();
         let id_attr = get_string_field(&data, "id").unwrap_or_default();
+        let node_index = get_number_field(&data, "index").unwrap_or(i as f64) as i32;
 
         nodes.push(RenderNode {
             x,
@@ -209,6 +222,7 @@ fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<Layou
             tag,
             class_name,
             id_attr,
+            node_index,
         });
     }
 
@@ -304,23 +318,27 @@ fn draw_svg(document: &Document, container: &Element, layout: &LayoutResult) -> 
         foreign_object
             .set_attribute("height", &CARD_HEIGHT.to_string())
             .map_err(|_| "Failed to set node height.".to_string())?;
-
         let card = document
             .create_element_ns(Some(XHTML_NS_URL), "div")
             .map_err(|_| "Failed to create card html.".to_string())?;
-        let class_name = (!node.class_name.is_empty()).then(|| node.class_name.clone()).unwrap_or("-".into());
-        let id_attr = (!node.id_attr.is_empty()).then(|| node.id_attr.clone()).unwrap_or("-".into());
+        let class_name = (!node.class_name.is_empty())
+            .then(|| node.class_name.clone())
+            .unwrap_or("-".into());
+        let id_attr = (!node.id_attr.is_empty())
+            .then(|| node.id_attr.clone())
+            .unwrap_or("-".into());
 
         let html = format!(
-            "<div style='width:{w}px;min-height:{h}px;box-sizing:border-box;border:1px solid #000;border-radius:10px;background:#fff;padding:10px;color:#000;'>\
-               <div style='display:flex;justify-content:space-between;align-items:center;'>\
+            "<div data-state='not-visited' id='{id}' class='graph-node data-[state=visited]:bg-gray-200 data-[state=intermediate]:bg-yellow-400 data-[state=selected]:bg-green-400 data-[state=current]:bg-blue-400 border-box border-2 rounded-lg bg-white p-2' style='width:{w}px;min-height:{h}px;'>\
+               <div class='flex justify-between items-center'>\
                  <span>&lt;{tag}&gt;</span>\
                </div>\
-               <div style='overflow:scroll;'>\
+               <div class='overflow-scroll'>\
                  <div style='white-space:nowrap;'><b>class</b>: {class_name}</div>\
                  <div style='white-space:nowrap;'><b>id</b>: {id_attr}</div>\
                </div>\
              </div>",
+            id = "graph-node-".to_string() + &node.node_index.to_string(),
             w = CARD_WIDTH,
             h = CARD_HEIGHT,
             tag = node.tag,
