@@ -26,6 +26,7 @@ struct ResultItem {
     query: String,
     paths: Vec<Vec<i32>>,
     selected: Vec<i32>,
+    traversal_path: Vec<i32>,
 }
 
 #[derive(Serialize,Deserialize)]
@@ -81,11 +82,13 @@ async fn query(body: web::Json<QueryPostBody>) -> HttpResponse {
                 query: "body".to_string(),
                 paths: vec![vec![0, 1]],
                 selected: vec![1],
+                traversal_path: vec![0, 1],
             },
             ResultItem {
                 query: ".meow".to_string(),
                 paths: vec![vec![1, 2], vec![1, 3], vec![1, 4]],
                 selected: vec![2, 3, 4],
+                traversal_path: vec![1, 2, 2, 3, 3, 4],
             },
         ],
         selected_nodes: vec![2, 3, 4],
