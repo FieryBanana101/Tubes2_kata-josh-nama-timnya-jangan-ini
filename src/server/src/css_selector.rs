@@ -1,3 +1,4 @@
+use actix_web::cookie::time::format_description::parse;
 use css_lexer::{Lexer as CssLexer, Token as CssToken, Kind as CssTokenType, EmptyAtomSet, SourceOffset};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,17 +54,23 @@ pub struct CssSelectorParser<'a> {
     current_token: CssToken,
     current_text: &'a str,
     current_start_pos: usize,
+    is_relative_selector: bool
 }
 
 impl<'a> CssSelectorParser<'a> {
 
+    /*
+        Function to construct a new CssSelectorParser, 
+        By default css selector is absolute unless it is needed to be relative 
+     */
     #[inline(always)]
-    pub fn new(input: &'a str) -> Self {
+    pub fn new(input: &'a str, is_relative: bool) -> Self {
         let p = CssSelectorParser {
             lexer: CssLexer::new(&EmptyAtomSet::ATOMS, input),
             current_token: CssToken::EOF,
             current_text: "",
             current_start_pos: 0,
+            is_relative_selector: is_relative
         };
         p
     }
@@ -80,6 +87,9 @@ impl<'a> CssSelectorParser<'a> {
     }
 
 
+    /*
+        Function acquire the next token from the CSS tokenizer
+     */
     fn next_token(&mut self) -> Result<(), String> {
         self.current_start_pos = self.lexer.offset().into();
         self.current_token = self.lexer.advance();
@@ -144,17 +154,35 @@ impl<'a> CssSelectorParser<'a> {
     */
     pub fn advance(&mut self) -> Result<(SelectorUnit, bool), String> {
 
+        /*
+            If we are at the beginning, skip leading whitespace and try to get a combinator, if failed then rewind 
+            This is done to account for relative selector list which comes from inside a pseudo-element.
+        */
         let mut combinator = None;
-        if self.current_token.kind() != CssTokenType::Eof {
+        if self.current_token.kind() == CssTokenType::Eof {
 
-            /* If this is not the first time we call .advance() on a parser, then try to get <combinator> first */
-            combinator = Some(self.parse_combinator()?);
-
-        } 
-        else { 
-            /* Handle possibly some leading whitespace */
             self.skip_to_just_before_non_whitespace()?;
+
+            if self.is_relative_selector {
+                let saved = self.clone();
+                let parse_result = self.parse_combinator();
+
+                if let Ok(value) = parse_result {
+                    combinator = Some(value);
+                }
+                else {
+                    *self = saved;
+                }
+            }
+
         }
+        /*
+            If we are not at the beginning parsing a combinator is mandatory, raise parser error when faield. 
+         */
+        else {
+            combinator = Some(self.parse_combinator()?);
+        }
+
 
         let mut valid_selector_unit = false;
 
@@ -810,9 +838,9 @@ mod tests {
     use super::*; 
 
     #[test]
-    fn test_css_parser() {
-
-        let css_parser_test_cases = vec![
+    fn test_absolute_css_parser() {
+        
+        static ABSOLUTE_CSS_PARSER_TESTS: &[&str; 21] = &[
             r#".btn-primary"#,
             r#"#main-header"#,
             r#"input[type="checkbox"]"#,
@@ -836,16 +864,15 @@ mod tests {
             r#"  *|svg  [  ns1|attr1  =  "val1"  ]  [  *|attr2  ^=  "val2"  i  ]  :nth-child(  3n  -  1  of  .class  :not(  #id  )  )  [  |attr3  *=  "val3"  ]  [attr4~="val4"  s]  abcd[  ns2|attr5  |=  "val5"  ].class#id.class2  >  |div  +  ::after:hover:where(  [title^="foo"  s],  :dir(ltr)  ) "#
         ];
         
-        
-        for (idx, testcase) in css_parser_test_cases.iter().enumerate() {
+        for (idx, testcase) in ABSOLUTE_CSS_PARSER_TESTS.iter().enumerate() {
     
-            println!("### Test Case {} ###", idx + 1);
+            println!("\n### Test Case {} ###", idx + 1);
             dbg!(testcase);
     
             /* General way to initialize the CSS parser */
-            let mut parser = CssSelectorParser::new(testcase);
+            let mut parser = CssSelectorParser::new(testcase, false);
     
-            println!("\n### Parsing Result ###\n");
+            println!("\n### Absolute Parsing Result ###\n");
     
             /* General usage of the CSS parser */
             loop {
@@ -857,9 +884,60 @@ mod tests {
                 }
             }
     
-            println!("\n");
+        }
+        println!("\n");
+    }
+
+
+    #[test]
+    fn test_relative_css_parser(){
+
+        static RELATIVE_CSS_PARSER_TESTS: &[&str; 21] = &[
+            r#"    ~    .btn-primary"#,
+            r#"    +.btn-secondary"#,
+            r#"~    .btn-secondary"#,
+            r#">#main-header"#,
+            r#"nav a.active"#,
+            r#"+ ul > li"#,
+            r#"~h2 + p"#,
+            r#"li:first-child"#,
+            r#"button:hover:disabled"#,
+            r#" ~ svg|rect[*|href^="https" i]"#,
+            r#"+|div[prefix|attr="value" s]"#,
+            r#"~*|*[ns|hidden]"#,
+            r#"div:not(.class1#id1[attr]):hover"#,
+            r#">article:has(> h2 + p):is(:nth-child(2n+1), [data-priority="high"])"#,
+            r#"section:where(header, footer) > .content:not(:empty)"#,
+            r#"~ ::part(header-btn):focus-visible::before"#,
+            r#" +::part(header):nth-last-of-type(3n-1):no-fallback"#,
+            r#"html > body  main[role="main"]  nav  ul  li:first-child > a[href^="/"]"#,
+            r#"~ *[a|b=c][d|e=f]#id:pseudo"#,
+            r#">[attr=" value with spaces "][empty=""]"#,
+            r#" +*|svg  [  ns1|attr1  =  "val1"  ]  [  *|attr2  ^=  "val2"  i  ]  :nth-child(  3n  -  1  of  .class  :not(  #id  )  )  [  |attr3  *=  "val3"  ]  [attr4~="val4"  s]  abcd[  ns2|attr5  |=  "val5"  ].class#id.class2  >  |div  +  ::after:hover:where(  [title^="foo"  s],  :dir(ltr)  ) "#
+        ];
+
+        for (idx, testcase) in RELATIVE_CSS_PARSER_TESTS.iter().enumerate() {
+    
+            println!("\n### Test Case {} ###", idx + 1);
+            dbg!(testcase);
+    
+            /* General way to initialize the CSS parser */
+            let mut relative_parser = CssSelectorParser::new(testcase, true);
+    
+            println!("\n### Relative Parsing Result ###\n");
+    
+            /* General usage of the CSS parser */
+            loop {
+                let (filter, is_eof) = relative_parser.advance().unwrap();
+                dbg!(filter);
+    
+                if is_eof {
+                    break;
+                }
+            }
     
         }
-        
+        println!("\n");
+
     }
 }
