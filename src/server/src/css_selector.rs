@@ -30,7 +30,7 @@ pub struct PseudoFilter {
 
 
 #[derive(Debug, Clone)]
-pub struct NodeFilter {
+pub struct SelectorUnit {
     pub namespace: Namespace,
     pub tag: Option<String>,
     pub ids: Option<Vec<String>>,
@@ -41,9 +41,9 @@ pub struct NodeFilter {
 
 
 #[derive(Debug, Clone)]
-pub struct SelectorUnit {
+pub struct NodeFilter {
     pub prev_combinator: Option<Combinator>,
-    pub filter: NodeFilter,
+    pub filter: SelectorUnit,
 }
 
 
@@ -84,6 +84,23 @@ impl<'a> CssSelectorParser<'a> {
             error_message: String::from("CSS Parser error. Due to these sequence of error, syntax is considered invalid:")
 
         }
+    }
+
+
+    pub fn parse_all(&mut self) -> Vec<NodeFilter> {
+
+        let mut vec: Vec<NodeFilter> = Vec::new();      
+
+        loop {
+            let (filter, is_eof) = self.advance().unwrap();
+            vec.push(filter);
+
+            if is_eof {
+                break;
+            }
+        };
+
+        vec
     }
 
 
@@ -169,7 +186,7 @@ impl<'a> CssSelectorParser<'a> {
 
         <complex-selector-unit> = [ <compound-selector>? <pseudo-compound-selector>* ]!
     */
-    pub fn advance(&mut self) -> Result<(SelectorUnit, bool), String> {
+    pub fn advance(&mut self) -> Result<(NodeFilter, bool), String> {
 
         /*
             If we are at the beginning, skip leading whitespace and try to get a combinator, if failed then rewind 
@@ -205,7 +222,7 @@ impl<'a> CssSelectorParser<'a> {
 
         let mut valid_selector_unit = false;
 
-        let mut filter = NodeFilter {
+        let mut filter = SelectorUnit {
             namespace: Namespace::Default,
             tag: None,
             ids: None,
@@ -296,7 +313,7 @@ impl<'a> CssSelectorParser<'a> {
         peeker.next_token().map_err(|_| self.error_message.clone())?;
 
         Ok(
-            (SelectorUnit{ prev_combinator: combinator, filter: filter },
+            (NodeFilter{ prev_combinator: combinator, filter: filter },
             peeker.css_lexer.current_token.kind() == CssTokenType::Eof)
         )
     }
@@ -332,9 +349,9 @@ impl<'a> CssSelectorParser<'a> {
 
 
     // <compound-selector> = [ <type-selector>? <subclass-selector>* ]!
-    fn parse_compound_selector(&mut self) -> Result<NodeFilter, ()> {
+    fn parse_compound_selector(&mut self) -> Result<SelectorUnit, ()> {
 
-        let mut filter = NodeFilter{
+        let mut filter = SelectorUnit{
             namespace: Namespace::Default,
             tag: None,
             ids: None,
@@ -412,9 +429,9 @@ impl<'a> CssSelectorParser<'a> {
         This function will return a PseudoFilter describing a <pseudo-compound-selector>,
         or an error message in String if parsing failed
      */
-    fn parse_pseudo_compound_selector(&mut self) -> Result<NodeFilter, ()> {
+    fn parse_pseudo_compound_selector(&mut self) -> Result<SelectorUnit, ()> {
 
-        let mut filter = NodeFilter {
+        let mut filter = SelectorUnit {
             namespace: Namespace::Default,
             tag: None,
             ids: None,
@@ -503,10 +520,10 @@ impl<'a> CssSelectorParser<'a> {
         <id-selector> = <hash-token>
         <class-selector> = '.' <ident-token>
 
-        This function will return a NodeFilter describing a <subclass-selector>
+        This function will return a SelectorUnit describing a <subclass-selector>
         or error message in String if parsing failed
     */
-    fn parse_subclass_selector(&mut self) -> Result<NodeFilter, ()> {
+    fn parse_subclass_selector(&mut self) -> Result<SelectorUnit, ()> {
 
         /*  
             We will try complex production first,
@@ -515,7 +532,7 @@ impl<'a> CssSelectorParser<'a> {
         let saved = self.css_lexer.clone();
         let parse_result = self.parse_attribute_selector();
         if let Ok(attribute_filter) = parse_result {
-            return Ok(NodeFilter {
+            return Ok(SelectorUnit {
                 namespace: Namespace::None, tag: None, classes: None, pseudos: None, ids: None,
                 attributes: Some(vec![attribute_filter])
             });
@@ -529,7 +546,7 @@ impl<'a> CssSelectorParser<'a> {
         let saved = self.css_lexer.clone();
         let parse_result = self.parse_pseudo_class_selector();
         if let Ok(pseudo_filter) = parse_result {
-            return Ok(NodeFilter {
+            return Ok(SelectorUnit {
                 namespace: Namespace::None, tag: None, classes: None, attributes: None, ids: None,
                 pseudos: Some(vec![pseudo_filter])
             });
@@ -547,7 +564,7 @@ impl<'a> CssSelectorParser<'a> {
         match self.css_lexer.current_token.kind() {
 
             CssTokenType::Hash => {
-                return Ok(NodeFilter {
+                return Ok(SelectorUnit {
                         namespace: Namespace::None, tag: None, classes: None, attributes: None, pseudos: None,
                         ids: Some(vec![self.css_lexer.current_text[1..].to_string()])
                     });
@@ -557,7 +574,7 @@ impl<'a> CssSelectorParser<'a> {
 
                 self.next_token()?;
                 if self.css_lexer.current_token.kind() == CssTokenType::Ident {
-                    return Ok(NodeFilter { 
+                    return Ok(SelectorUnit { 
                             namespace: Namespace::None, tag: None, ids: None, attributes: None, pseudos: None,
                             classes: Some(vec![self.css_lexer.current_text.to_string()])
                         });
