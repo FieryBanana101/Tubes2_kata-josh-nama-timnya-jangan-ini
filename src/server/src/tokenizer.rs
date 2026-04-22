@@ -1,10 +1,10 @@
-use std::{collections::HashMap, fs, io, fmt};
+use std::{collections::HashMap, fs, io, fmt, sync::Arc};
 use html5gum::{Tokenizer, Token, HtmlString};
 use reqwest;
 #[derive(Debug, Clone)]
 enum Node {
-    Element(Element),
-    Text(String)
+    Element(Arc<Element>),
+    Text(Arc<String>)
 }
 
 #[derive(Debug, Clone)]
@@ -13,6 +13,34 @@ struct Element {
     attributes: HashMap<String, String>,
     children: Vec<Node>
 }
+
+// DEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUG
+// impl fmt::Display for Node {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         self.fmt_indent(f, 0)
+//     }
+// }
+
+// impl Node {
+//     fn fmt_indent(&self, f: &mut fmt::Formatter<'_>, depth: usize) -> fmt::Result {
+//         let indent = "  ".repeat(depth);
+//         match self {
+//             Node::Element(el) => {
+//                 write!(f, "{}<{}", indent, el.tag)?;
+//                 for (k, v) in &el.attributes {
+//                     write!(f, " {}=\"{}\"", k, v)?;
+//                 }
+//                 writeln!(f, ">")?;
+//                 for child in &el.children {
+//                     child.fmt_indent(f, depth + 1)?;
+//                 }
+//                 writeln!(f, "{}</{}>", indent, el.tag)
+//             }
+//             Node::Text(s) => writeln!(f, "{}\"{}\"", indent, s),
+//         }
+//     }
+// }
+// DEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUG
 
 // pub async fn get_html(url: String) -> Result<String, reqwest::Error> {
 //     let res = reqwest::get(url).await?;
@@ -53,7 +81,7 @@ fn htmlstring_to_string(str: &HtmlString) -> String{
 
 const VOID_TAGS: &[&str] = &["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"];
 const HEAD_TAGS: &[&str] = &["title", "base", "link", "style", "meta", "script", "noscript", "template"];
-pub fn parser(html: &str) -> Result<Element, String> {
+pub fn parser(html: &str) -> Result<Arc<Element>, String> {
 
     let mut output = "".to_string();
     let mut stack: Vec<Element> = Vec::new();
@@ -93,7 +121,7 @@ pub fn parser(html: &str) -> Result<Element, String> {
                             children: Vec::new()
                         };
                         if let Some(parent) = stack.last_mut() {
-                            parent.children.push(Node::Element(node));
+                            parent.children.push(Node::Element(Arc::new(node)));
                         }
                     }
                     let mut node = Element {
@@ -107,13 +135,13 @@ pub fn parser(html: &str) -> Result<Element, String> {
                     while stack.len() > pos + 1 {
                         let node = stack.pop().unwrap();
                         if let Some(parent) = stack.last_mut() {
-                            parent.children.push(Node::Element(node));
+                            parent.children.push(Node::Element(Arc::new(node)));
                         }
                     }
 
                     let node = stack.pop().unwrap();
                     if let Some(parent) = stack.last_mut() {
-                        parent.children.push(Node::Element(node));
+                        parent.children.push(Node::Element(Arc::new(node)));
                     }
                     else {
                         // the only element in the tree
@@ -134,7 +162,7 @@ pub fn parser(html: &str) -> Result<Element, String> {
                     }
                     
                     if let Some(parent) = stack.last_mut(){
-                        parent.children.push(Node::Element(new_node));
+                        parent.children.push(Node::Element(Arc::new(new_node)));
                     }
 
                     output.push_str(&format!("SelfClosingToken({})\n", tag_string));
@@ -162,13 +190,13 @@ pub fn parser(html: &str) -> Result<Element, String> {
                     while stack.len() > pos + 1 {
                         let node = stack.pop().unwrap();
                         if let Some(parent) = stack.last_mut() {
-                            parent.children.push(Node::Element(node));
+                            parent.children.push(Node::Element(Arc::new(node)));
                         }
                     }
 
                     let node = stack.pop().unwrap();
                     if let Some(parent) = stack.last_mut() {
-                        parent.children.push(Node::Element(node));
+                        parent.children.push(Node::Element(Arc::new(node)));
                     }
                     else {
                         // the only element in the tree
@@ -185,7 +213,7 @@ pub fn parser(html: &str) -> Result<Element, String> {
                 let trimmed = tag_string.trim();
                 if trimmed.is_empty() { continue; }
                 if let Some(parent) = stack.last_mut() {
-                    parent.children.push(Node::Text(tag_string.clone()));
+                    parent.children.push(Node::Text(Arc::new(tag_string.clone())));
                 }
                 println!(); 
                     output.push_str(&tag_string); output.push('\n');
@@ -199,14 +227,14 @@ pub fn parser(html: &str) -> Result<Element, String> {
     while stack.len() > 1 {
         let node = stack.pop().unwrap();
         if let Some(parent) = stack.last_mut() {
-            parent.children.push(Node::Element(node));
+            parent.children.push(Node::Element(Arc::new(node)));
         }
     }
     if let Some(node) = stack.pop() {
         root = node;
     }
     fs::write("tokenized.txt", output).ok();
-    Ok(root)
+    Ok(Arc::new(root))
 }
 
 // #[tokio::main]
@@ -223,7 +251,7 @@ pub fn parser(html: &str) -> Result<Element, String> {
 //             match root {
 //                 Ok(root) => {
 //                     let tree = Node::Element(root);
-//                     fs::write("tree.txt", tree.to_string()).ok();
+//                     // fs::write("tree.txt", tree.to_string()).ok();
 //                 }
 //                 Err(e) => println!("Unable to parse tree: {}", e)
 //             }
