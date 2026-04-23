@@ -2,16 +2,16 @@ use std::{collections::HashMap, fs, io, fmt, sync::Arc};
 use html5gum::{Tokenizer, Token, HtmlString};
 use reqwest;
 #[derive(Debug, Clone)]
-enum Node {
+pub enum Node {
     Element(Arc<Element>),
     Text(Arc<String>)
 }
 
 #[derive(Debug, Clone)]
-struct Element {
-    tag: String,
-    attributes: HashMap<String, String>,
-    children: Vec<Node>
+pub struct Element {
+    pub tag: String,
+    pub attributes: HashMap<String, String>,
+    pub children: Vec<Node>
 }
 
 // DEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUG

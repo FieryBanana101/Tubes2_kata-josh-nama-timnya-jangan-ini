@@ -1,4 +1,4 @@
-use actix_web::cookie::time::format_description::parse;
+use crate::tokenizer::{Element};
 use css_lexer::{Lexer as CssLexer, Token as CssToken, Kind as CssTokenType, EmptyAtomSet, SourceOffset};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -40,10 +40,99 @@ pub struct SelectorUnit {
 }
 
 
+
+impl SelectorUnit {
+    pub fn match_node(&self, element: &Element) -> bool {
+
+        if let Some(ref selector_tag) = self.tag {
+            if selector_tag != &element.tag {
+                return false;
+            }
+        }
+ 
+        if let Some(ref selector_ids) = self.ids {
+            if let Some(element_id) = element.attributes.get("id"){
+
+                for id in selector_ids {
+                    if id != element_id {
+                        return false;
+                    }
+                }
+
+            } 
+            else {
+                return false;
+            }
+        }
+
+        if let Some(ref selector_classes) = self.classes {
+            if let Some(class_attr) = element.attributes.get("class"){
+
+                let element_classes: Vec<&str> = class_attr.split_whitespace().collect();
+                
+                for class in selector_classes {
+                    if !element_classes.contains(&class.as_str()) {
+                        return false;
+                    }
+                }
+
+            } 
+            else {
+                return false;
+            }
+        }
+
+        if let Some(ref filters) = self.attributes {
+            for filter in filters {
+                if !self.match_attribute_filter(element, filter) {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
+
+    fn match_attribute_filter(&self, element: &Element, filter: &AttributeFilter) -> bool {
+        
+        let element_attr_value = match element.attributes.get(&filter.name) {
+            Some(v) => v,
+            None => return false,
+        };
+
+
+        let op = match &filter.operator {
+            Some(op_str) => op_str.as_str(),
+            None => return true, 
+        };
+
+        if let Some(filter_value) = &filter.value {
+
+            let mut value = filter_value.clone();
+            if value.starts_with('"'){ value = value[1..value.len()-1].to_string(); }
+
+            match op {
+                "="  => return *element_attr_value == value,
+                "~" => return element_attr_value.to_string().split_whitespace().any(|word| word == value),
+                "|" => return *element_attr_value == value || element_attr_value.starts_with(&format!("{}-", value)),
+                "^" => return element_attr_value.starts_with(&value),
+                "$" => return element_attr_value.ends_with(&value),
+                "*" => return element_attr_value.contains(&value),
+                _   => return false,
+            }
+        };
+
+        return false;
+
+    }
+}
+
+
 #[derive(Debug, Clone)]
 pub struct NodeFilter {
     pub prev_combinator: Option<Combinator>,
-    pub filter: SelectorUnit,
+    pub selector: SelectorUnit,
 }
 
 
@@ -313,7 +402,7 @@ impl<'a> CssSelectorParser<'a> {
         peeker.next_token().map_err(|_| self.error_message.clone())?;
 
         Ok(
-            (NodeFilter{ prev_combinator: combinator, filter: filter },
+            (NodeFilter{ prev_combinator: combinator, selector: filter },
             peeker.css_lexer.current_token.kind() == CssTokenType::Eof)
         )
     }
