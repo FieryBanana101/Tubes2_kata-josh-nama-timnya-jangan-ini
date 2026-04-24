@@ -1,13 +1,14 @@
 use std::{collections::HashMap, fs, io, fmt, sync::Arc};
 use html5gum::{Tokenizer, Token, HtmlString};
 use reqwest;
-#[derive(Debug, Clone)]
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     Element(Arc<Element>),
     Text(Arc<String>)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Element {
     pub tag: String,
     pub attributes: HashMap<String, String>,

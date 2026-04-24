@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 mod css_selector;
 mod traversal;
+mod async_util;
 mod tokenizer;
 
 #[derive(Serialize,Deserialize)]
