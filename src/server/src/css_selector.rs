@@ -1,9 +1,13 @@
 use crate::tokenizer::{Element};
 use css_lexer::{Lexer as CssLexer, Token as CssToken, Kind as CssTokenType, EmptyAtomSet, SourceOffset};
 
+
+/* DOM Node filter criteria for namespaces */
 #[derive(Debug, Clone, PartialEq)]
 pub enum Combinator { Descendant, Child, DirectNextSibling, NextSibling}
 
+
+/* DOM Node filter criteria for attributes */
 #[derive(Debug, Clone, PartialEq)]
 pub enum Namespace {
     Default,
@@ -12,6 +16,8 @@ pub enum Namespace {
     Named(String),
 }
 
+
+/* DOM Node filter criteria for attributes */
 #[derive(Debug, Clone)]
 pub struct AttributeFilter {
     namespace: Namespace,
@@ -22,6 +28,7 @@ pub struct AttributeFilter {
 }
 
 
+/* DOM Node filter criteria for pseudo-element and pseudo-classes */
 #[derive(Debug, Clone)]
 pub struct PseudoFilter {
     name: String, 
@@ -29,6 +36,7 @@ pub struct PseudoFilter {
 }
 
 
+/* Struct representing the smallest unit of a CSS Selector, this will be the one compared with individual DOM Nodes */
 #[derive(Debug, Clone)]
 pub struct SelectorUnit {
     pub namespace: Namespace,
@@ -40,16 +48,18 @@ pub struct SelectorUnit {
 }
 
 
-
+/* Implemented a method to match CSS Selector Unit with a DOM Node */
 impl SelectorUnit {
     pub fn match_node(&self, element: &Element) -> bool {
 
+        /* Match the tag */
         if let Some(ref selector_tag) = self.tag {
             if selector_tag != &element.tag {
                 return false;
             }
         }
- 
+        
+        /* Match the ID */
         if let Some(ref selector_ids) = self.ids {
             if let Some(element_id) = element.attributes.get("id"){
 
@@ -65,6 +75,7 @@ impl SelectorUnit {
             }
         }
 
+        /* Match the classes */
         if let Some(ref selector_classes) = self.classes {
             if let Some(class_attr) = element.attributes.get("class"){
 
@@ -82,6 +93,7 @@ impl SelectorUnit {
             }
         }
 
+        /* Match other attributes */
         if let Some(ref filters) = self.attributes {
             for filter in filters {
                 if !self.match_attribute_filter(element, filter) {
@@ -129,6 +141,7 @@ impl SelectorUnit {
 }
 
 
+/* Struct representing the definition of a filter which can determine wheter a DOM node match a certain css selector */
 #[derive(Debug, Clone)]
 pub struct NodeFilter {
     pub prev_combinator: Option<Combinator>,
@@ -136,6 +149,7 @@ pub struct NodeFilter {
 }
 
 
+/* Struct representing a CSS Selector Tokenizer (used 'css_parser' crate for the lexer) */
 #[derive(Clone)]
 struct CssLexerWrapper<'a> {
     tokenizer: CssLexer<'a>,
@@ -144,6 +158,8 @@ struct CssLexerWrapper<'a> {
     current_start_pos: usize,
 }
 
+
+/* Struct representing a CSS Selector Parser (implemented parsing from scratch) */
 #[derive(Clone)]
 pub struct CssSelectorParser<'a> {
     css_lexer: CssLexerWrapper<'a>,
@@ -176,6 +192,11 @@ impl<'a> CssSelectorParser<'a> {
     }
 
 
+    /*
+        Function to parse the CSS selector string fully until the end,
+        this is made to make it easier for some circumstances where we need the entire parsed selector,
+        instead of advancing one-by-one
+     */
     pub fn parse_all(&mut self) -> Vec<NodeFilter> {
 
         let mut vec: Vec<NodeFilter> = Vec::new();      
@@ -959,11 +980,11 @@ impl<'a> CssSelectorParser<'a> {
 
 
 /* 
-        Function to unit test our css selector parser, test result are manually checked for now,
-        Also see this function for reference on how to use the CSS parser.
+    Function to unit test our css selector parser, test result are manually checked for now,
+    Also see this function for reference on how to use the CSS parser.
 
-        CURRENT TEST STATUS: PASSED ALL
-    */
+    CURRENT TEST STATUS: PASSED ALL
+*/
 #[cfg(test)]
 mod tests {
     use super::*; 

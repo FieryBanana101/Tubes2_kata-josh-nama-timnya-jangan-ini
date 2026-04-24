@@ -3,6 +3,10 @@ use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use crate::tokenizer::Element;
 
+
+/*
+    Task descriptor to describe what a thread should do during one execution unit in a tree traverseal context.
+*/
 #[derive(Debug, Clone)]
 pub struct ThreadTask {
     pub curr_node       : Arc<Element>,
@@ -14,6 +18,9 @@ pub struct ThreadTask {
 
 
 
+/*
+    Thread safe vector for various usage in asyncrhonous traversal
+*/
 #[derive(Debug, Clone)]
 pub struct AsyncVec<T> {
     pub data: Arc<Mutex<Vec<T>>>,
@@ -43,7 +50,10 @@ impl<T> AsyncVec<T> {
 }
 
 
-
+/*
+    General trait for tree traversal data structure which will be the global task pool, 
+    accessed by each thread to get a new task then execute it in parallel.
+*/
 pub trait AsyncTraversalTracker<T> {
     fn new() -> Self where Self: Sized; 
     fn push(&self, item: T) where T: Debug;
@@ -52,19 +62,25 @@ pub trait AsyncTraversalTracker<T> {
 }
 
 
+/*
+    Thread safe stack data structure, implements the AsyncTraversalTracker trait and will be used in DFS related traversal.
+*/
 #[derive(Debug, Clone)]
 pub struct AsyncStack<T> {
     pub data: Arc<Mutex<VecDeque<T>>>,
 }
 
 
+/*
+    Thread safe queue data structure, implements the AsyncTraversalTracker trait and will be used in BFS related traversal.
+*/
 #[derive(Debug, Clone)]
 pub struct AsyncQueue<T> {
     pub data: Arc<Mutex<VecDeque<T>>>,
 }
 
 
-
+/* Trait implementation for thread safe stack */
 impl<T> AsyncTraversalTracker<T> for AsyncStack<T> {
 
     fn new() -> Self {
@@ -95,7 +111,7 @@ impl<T> AsyncTraversalTracker<T> for AsyncStack<T> {
 }
 
 
-
+/* Trait implementation for thread safe queue */
 impl<T> AsyncTraversalTracker<T> for AsyncQueue<T> {
 
     fn new() -> Self {

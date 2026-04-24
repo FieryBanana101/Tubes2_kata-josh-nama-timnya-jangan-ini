@@ -8,7 +8,11 @@ use crate::css_selector::*;
 use crate::async_util::*;
 
 
-
+/* 
+    Push all children of the current node into the global task pool,
+    the task which is given to the children will be pointed by filter_idx as index from the CSS Selector Unit list,
+    optionally we can enter the previous task accordingly and depth can be set relative to the curr_node depth.
+*/
 fn push_all_children<T: AsyncTraversalTracker<ThreadTask>>(
     task_tracker: &Arc<T>,
     curr_node: &Arc<Element>, 
@@ -47,7 +51,12 @@ fn push_all_children<T: AsyncTraversalTracker<ThreadTask>>(
 
 
 
-
+/*
+    Push the next sibling from a certain DOM Node into the global task pool,
+    this next sibling will be described from a parent_node and the index location in the parent's children list.
+    the task which is given to the child will be pointed by filter_idx as index from the CSS Selector Unit list,
+    optionally we can enter the previous task accordingly and depth can be set relative to the curr_node depth.
+*/
 fn push_next_sibling<T: AsyncTraversalTracker<ThreadTask>>(
     task_tracker: &Arc<T>, 
     parent_node: &Arc<Element>, 
@@ -86,7 +95,12 @@ fn push_next_sibling<T: AsyncTraversalTracker<ThreadTask>>(
 
 
 
-
+/*
+    Main base for asynchronous traversal in a DOM tree to match a CSS selector, will panic when error are encountered.
+    This function can be called by giving the html and css query, number of thread to use, and the data structure to be used as global task pool (must be thread safe).
+    
+    TODO: return an error message instead of panicking
+*/
 pub fn async_traversal_base(
     html_text: &str, 
     css_query: &str, 
@@ -94,16 +108,22 @@ pub fn async_traversal_base(
     async_tracker: impl AsyncTraversalTracker<ThreadTask> + Send + Sync + 'static
 ) -> AsyncVec<Arc<Element>> {
 
+    /* Parse the html text */
     let tree: Arc<Element> = parser(html_text).expect("Failed to parse HTML");
 
+
+    /* Parse and prepare the css selector list */
     let css_filters: Vec<NodeFilter> = CssSelectorParser::new(css_query, false).parse_all();
     let async_filters: Arc<Vec<NodeFilter>>  = Arc::new(css_filters);
 
+
+    /* Prepare asyncrhonous global task pool, atomic counter for number of active thread, and thread list */
     let atomic_counter: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
     let mut threads: Vec<thread::JoinHandle<()>> = vec![];
-
     let async_tracker = Arc::new(async_tracker);
 
+
+    /* Start traversal by pusing the root to the global task pool */
     async_tracker.push(ThreadTask { 
         curr_node: Arc::clone(&tree),
         parent_node: Arc::clone(&tree),
@@ -112,21 +132,27 @@ pub fn async_traversal_base(
         depth: 0,
     });
 
-    
+
+    /* Prepare the result vector */
     let mut result: Arc<AsyncVec<Arc<Element>>> = Arc::new(AsyncVec::<Arc<Element>>::new());
 
     for _thread_id in 0..core_num {
         
+        /* Prepare each shared data structure for the threads, including the atomic counter*/
         let shared_task_stracker = Arc::clone(&async_tracker);
         let shared_filters = Arc::clone(&async_filters);
         let shared_result: Arc<AsyncVec<Arc<Element>>> = Arc::clone(&result);
-
         let active_threads_count = Arc::clone(&atomic_counter);
-
 
         let thread = thread::spawn(move || {
             
             'thread_loop: loop {
+
+                /* 
+                    Currently, this thread is inactive, it will try to get a task from the global task pool (will busy wait until found).
+                    A thread is considered done only when global task pool is empty and 
+                    number of active thread is zero (i.e. no thread is doing any task)
+                */
                 let mut task = shared_task_stracker.pop();
 
                 while task.is_none() {
@@ -136,8 +162,9 @@ pub fn async_traversal_base(
                     task = shared_task_stracker.pop();
                 }
 
+                /* When a task is acquired, consider this thread as active */
                 active_threads_count.fetch_add(1, Ordering::SeqCst);
-                
+                 
                 let ThreadTask { 
                     curr_node, 
                     node_child_pos,
@@ -147,14 +174,20 @@ pub fn async_traversal_base(
                 } = task.unwrap();
 
                 
+                /* Determine whether the current CSS selector and DOM node described by the task match */
                 let curr_filter: &NodeFilter = shared_filters.get(curr_filter_idx).unwrap();
                 let node_match_filter = curr_filter.selector.match_node(&curr_node);
                 
                 if node_match_filter {
 
+                    /* If there are no more selector unit to match from the CSS selector list */
                     if curr_filter_idx + 1 == shared_filters.len() {
                         shared_result.push(curr_node.clone());
 
+                        /* 
+                            If the last combinator is a '>' or '~', 
+                            there are still possible match somewhere after this 
+                        */
                         match curr_filter.prev_combinator {
 
                             None | Some(Combinator::Descendant) => {
@@ -180,9 +213,15 @@ pub fn async_traversal_base(
 
                         active_threads_count.fetch_sub(1, Ordering::SeqCst);
                         continue 'thread_loop;
+
                     }
 
 
+                    /* 
+                        If there are still more selector unit to match from the CSS selector list, 
+                        push new task either from the children or the next sibling accordingly,
+                        based on the next combinator.
+                    */
                     let next_filter = &shared_filters.get(curr_filter_idx + 1).expect("Invalid css filter index");
                     let next_combinator = next_filter.prev_combinator.as_ref().expect("Unexpected None value Combinator");
                     match next_combinator {
@@ -225,8 +264,13 @@ pub fn async_traversal_base(
                     };
 
                 }
-                else{
+                else {
                     
+                    /* 
+                        If the current DOM Node and CSS selector unit does not match,
+                        propagate the current CSS selector unit to the children or next sibling accordingly.
+                        We only consider this when the previous combinator is '>' or '~'.
+                    */
                     match curr_filter.prev_combinator {
                         
                         Some(Combinator::Descendant) | None => {
@@ -264,16 +308,22 @@ pub fn async_traversal_base(
     }
 
 
+    /* Join all threads which have been spawned */
     for thread in threads {
         thread.join().expect("Failed to join threads");
     };
 
+    /* Return the result vector of DOM Node which matches the CSS Selector Unit list */
     Arc::into_inner(result).expect("Tried to return traversal result before all threads are finished.")
 
 }
 
 
 
+/*
+    Asynchronous DFS traversal to find matching DOM Node.
+    This function is only a wrapper for the main traversal function.
+*/
 pub fn async_dfs(html_text: &str,  css_query: &str, thread_num: usize) -> Option<Vec<Arc<Element>>> {
     let result: AsyncVec<Arc<Element>> = async_traversal_base(
         html_text, 
@@ -287,6 +337,10 @@ pub fn async_dfs(html_text: &str,  css_query: &str, thread_num: usize) -> Option
 
 
 
+/*
+    Asynchronous BFS traversal to find matching DOM Node.
+    This function is only a wrapper for the main traversal function.
+*/
 pub fn async_bfs(html_text: &str,  css_query: &str, thread_num: usize) -> Option<Vec<Arc<Element>>> {
     let result = async_traversal_base(
         html_text, 
@@ -301,6 +355,12 @@ pub fn async_bfs(html_text: &str,  css_query: &str, thread_num: usize) -> Option
 
 
 
+/* 
+    Function to unit test our traversal result, test result are manually checked for now,
+    Also see this function for reference on how to use the traversal function (async_dfs and async_bfs).
+
+    CURRENT TEST STATUS: PASSED ALL
+*/
 #[cfg(test)]
 mod tests {
 
