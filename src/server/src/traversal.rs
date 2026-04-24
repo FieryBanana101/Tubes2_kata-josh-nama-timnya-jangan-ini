@@ -448,7 +448,7 @@ mod tests {
 
         let testcases = vec![
             r##" div "##,
-            r##"  body ul > li  a[href ^= "/"][href$="web"   ]  "##,
+            r##"  body ul > li  a[href ^= "/"][href$="web"  ]  "##,
             r##"html > body main#content-area section.deep-nesting-test div.level-1 div.level-3 > div.level-4 article.deep-article header h3.highlight"##,
             r##"     header ~main~ footer"##,
             r##"     li ~ li > span + div li       "##,

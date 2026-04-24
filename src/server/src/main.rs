@@ -6,6 +6,7 @@ mod css_selector;
 mod traversal;
 mod async_util;
 mod tokenizer;
+mod matching;
 
 #[derive(Serialize,Deserialize)]
 struct QueryPostBody {

@@ -1,4 +1,3 @@
-use crate::tokenizer::{Element};
 use css_lexer::{Lexer as CssLexer, Token as CssToken, Kind as CssTokenType, EmptyAtomSet, SourceOffset};
 
 
@@ -20,19 +19,19 @@ pub enum Namespace {
 /* DOM Node filter criteria for attributes */
 #[derive(Debug, Clone)]
 pub struct AttributeFilter {
-    namespace: Namespace,
-    name: String, 
-    operator: Option<String>,
-    value: Option<String>,
-    modifier: Option<char>
+    pub namespace: Namespace,
+    pub name: String, 
+    pub operator: Option<String>,
+    pub value: Option<String>,
+    pub modifier: Option<char>
 }
 
 
 /* DOM Node filter criteria for pseudo-element and pseudo-classes */
 #[derive(Debug, Clone)]
 pub struct PseudoFilter {
-    name: String, 
-    args: Option<String> 
+    pub name: String, 
+    pub args: Option<String> 
 }
 
 
@@ -48,99 +47,6 @@ pub struct SelectorUnit {
 }
 
 
-/* Implemented a method to match CSS Selector Unit with a DOM Node */
-impl SelectorUnit {
-    pub fn match_node(&self, element: &Element) -> bool {
-
-        /* Match the tag */
-        if let Some(ref selector_tag) = self.tag {
-            if selector_tag != &element.tag {
-                return false;
-            }
-        }
-        
-        /* Match the ID */
-        if let Some(ref selector_ids) = self.ids {
-            if let Some(element_id) = element.attributes.get("id"){
-
-                for id in selector_ids {
-                    if id != element_id {
-                        return false;
-                    }
-                }
-
-            } 
-            else {
-                return false;
-            }
-        }
-
-        /* Match the classes */
-        if let Some(ref selector_classes) = self.classes {
-            if let Some(class_attr) = element.attributes.get("class"){
-
-                let element_classes: Vec<&str> = class_attr.split_whitespace().collect();
-                
-                for class in selector_classes {
-                    if !element_classes.contains(&class.as_str()) {
-                        return false;
-                    }
-                }
-
-            } 
-            else {
-                return false;
-            }
-        }
-
-        /* Match other attributes */
-        if let Some(ref filters) = self.attributes {
-            for filter in filters {
-                if !self.match_attribute_filter(element, filter) {
-                    return false;
-                }
-            }
-        }
-
-        true
-    }
-
-
-    fn match_attribute_filter(&self, element: &Element, filter: &AttributeFilter) -> bool {
-        
-        let element_attr_value = match element.attributes.get(&filter.name) {
-            Some(v) => v,
-            None => return false,
-        };
-
-
-        let op = match &filter.operator {
-            Some(op_str) => op_str.as_str(),
-            None => return true, 
-        };
-
-        if let Some(filter_value) = &filter.value {
-
-            let mut value = filter_value.clone();
-            if value.starts_with('"'){ value = value[1..value.len()-1].to_string(); }
-
-            match op {
-                "="  => return *element_attr_value == value,
-                "~" => return element_attr_value.to_string().split_whitespace().any(|word| word == value),
-                "|" => return *element_attr_value == value || element_attr_value.starts_with(&format!("{}-", value)),
-                "^" => return element_attr_value.starts_with(&value),
-                "$" => return element_attr_value.ends_with(&value),
-                "*" => return element_attr_value.contains(&value),
-                _   => return false,
-            }
-        };
-
-        return false;
-
-    }
-}
-
-
 /* Struct representing the definition of a filter which can determine wheter a DOM node match a certain css selector */
 #[derive(Debug, Clone)]
 pub struct NodeFilter {
@@ -152,10 +58,10 @@ pub struct NodeFilter {
 /* Struct representing a CSS Selector Tokenizer (used 'css_parser' crate for the lexer) */
 #[derive(Clone)]
 struct CssLexerWrapper<'a> {
-    tokenizer: CssLexer<'a>,
-    current_token: CssToken,
-    current_text: &'a str,
-    current_start_pos: usize,
+    pub tokenizer: CssLexer<'a>,
+    pub current_token: CssToken,
+    pub current_text: &'a str,
+    pub current_start_pos: usize,
 }
 
 
