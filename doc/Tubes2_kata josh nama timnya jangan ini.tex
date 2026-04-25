@@ -1045,7 +1045,7 @@ Dengan membuat struktur global sebagai LIFO (\textit{Last-in-first-out}) maka ki
 sedangkan jika FIFO (\textit{First-in-first-out}) maka akan berjalan BFS. Desain ini membuat kode cukup \textit{reusable} dan modular. \\
 
 
-\subsection{Perancangan LCA}
+\subsection{Perancangan LCA} \label{section-lca-design}
 
 LCA sesuai yang dijelaskan pada bagian \ref{section-lca} secara teknis merupakan traversal jenis DFS, 
 ada dua observasi yang dapat dilakukan untuk melakukan perancangan LCA,
@@ -1069,11 +1069,239 @@ Setelah memecahkan masalah-masalah tersebut, desain algoritma dapat langsung men
 \pagebreak
 
 
+
 \section{Implementasi dan Pengujian}
 
 \subsection{Implementasi}
 
-\subsubsection{}
+Implementasi secara garis besar dibagi menjadi dua buah proyek, 
+yaitu server backend yang mengatur logika parsing dan traversal,
+kemudian ada aplikasi frontend dalam bentuk konten web yang akan menjadi antarmuka pengguna
+
+
+\subsubsection{Backend Server}
+
+Implementasi server backend dilakukan menggunakan bahasa pemrograman \textbf{Rust} dan \textit{package manager}/\textit{build tools} \textbf{Cargo}. \\
+
+Digunakan \textit{framework} eksternal yaitu \textbf{html5gum} dan \textbf{css\_lexer}, 
+dimana keduanya hanya membantu melakukan tokenisasi elemen-elemen HTML dan CSS. 
+Selain itu digunakan teknik memori manajemen menggunakan tipe \textit{built-in} Arc (\textit{asynchronous reference counting}) pointer dari bahasa pemrograman \textbf{Rust}. \\
+
+Detail implementasi meliputi beberapa file berikut:
+\begin{itemize}
+    \item \textbf{async\_util.rs}, file ini berisi struktur yang akan membantu dalam melakukan \textit{multi-threading}.
+    \item \textbf{css\_selector.rs}, file ini berisi seluruh fungsionalitas \textit{parser} CSS Selector yang dibuat.
+    \item \textbf{html.rs}, file ini berisi seluruh fungsionalitas \textit{parser} HTML yang dibuat.
+    \item \textbf{matching.rs}, file ini berisi fungsi pembantu untuk pencocokan hubungan antara simpul DOM Tree dengan CSS Selector.
+    \item \textbf{traversal.rs}, file ini berisi logika utama \textit{multi-threaded} DFS dan BFS.
+    \item \textbf{lca.rs}, file ini berisi logika utama teknik \textit{binary lifting} dan LCA yang digunakan.
+    \item \textbf{main.rs}, file ini berisi logika server utama yang akan menerima dan merespon request untuk mengirim aplikasi frontend dalam bentuk konten web.
+\end{itemize} \\
+
+
+Struktur yang digunakan untuk menyimpan simpul DOM Tree adalah sebagai berikut, simpul DOM Tree akan dibagi menjadi dua kasus, antara menjadi elemen HTML atau hanya teks biasa,
+\begin{minted}{rust}
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum Node {
+        Element(Arc<Element>),
+        Text(Arc<String>)
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct Element {
+        pub tag: String,
+        pub attributes: HashMap<String, String>,
+        pub children: Vec<Node>
+    }
+\end{minted} \\
+
+
+Kemudian struktur berikut ini yang akan menjadi basis dari proses \textit{parsing} CSS Selector, struktur tersebut dibuat berdasarkan spesifikasi tipe-tipe selektor CSS,
+\begin{minted}{rust}
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub enum Combinator {
+        Descendant,
+        Child,
+        DirectNextSibling,
+        NextSibling,
+    }
+    
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub enum Namespace {
+        Default,
+        Any,
+        None,
+        Named(String),
+    }
+    
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct AttributeFilter {
+        pub namespace: Namespace,
+        pub name: String,
+        pub operator: Option<String>,
+        pub value: Option<String>,
+        pub modifier: Option<char>,
+    }
+    
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct PseudoFilter {
+        pub name: String,
+        pub args: Option<String>,
+    }
+    
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct SelectorUnit {
+        pub namespace: Namespace,
+        pub tag: Option<String>,
+        pub ids: Option<Vec<String>>,
+        pub classes: Option<Vec<String>>,
+        pub attributes: Option<Vec<AttributeFilter>>,
+        pub pseudos: Option<Vec<PseudoFilter>>,
+    }
+    
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct NodeFilter {
+        pub prev_combinator: Option<Combinator>,
+        pub selector: SelectorUnit,
+    }
+    
+    #[derive(Clone)]
+    struct CssLexerWrapper<'a> {
+        tokenizer: CssLexer<'a>,
+        current_token: CssToken,
+        current_text: &'a str,
+        current_start_pos: usize,
+    }
+    
+    #[derive(Clone)]
+    pub struct CssSelectorParser<'a> {
+        css_lexer: CssLexerWrapper<'a>,
+        is_relative_selector: bool,
+        error_message: String,
+        pub traversal: CssSelectorTraversal,
+    }
+\end{minted} \\
+
+
+Lalu struktur yang mendeskripsikan perintah untuk dijalankan oleh thread turunan yaitu,
+\begin{minted}{rust}
+    #[derive(Debug, Clone)]
+    pub struct ThreadTask {
+        pub curr_node           : Arc<Element>,
+        pub node_child_pos      : usize,
+        pub parent_node         : Arc<Element>,
+        pub selector_list_idx   : usize,
+        pub selector_unit_idx   : usize,
+        pub depth               : usize
+    }
+\end{minted} \\
+
+
+Struktur tersebut dapat digunakan pada variasi struktur data global \textit{thread safe} berikut,
+\begin{minted}{rust}
+    #[derive(Debug, Clone)]
+    pub struct AsyncVec<T> {
+        pub data: Arc<Mutex<Vec<T>>>,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct AsyncHashSet<T> {
+        pub data: Arc<Mutex<HashSet<T>>>,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct AsyncStack<T> {
+        pub data: Arc<Mutex<VecDeque<T>>>,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct AsyncQueue<T> {
+        pub data: Arc<Mutex<VecDeque<T>>>,
+    }
+\end{minted} \\
+
+
+Terakhir terdapat struktur berikut yang menjadi hasil dari \textit{pre-processing} teknik \textit{binary lifting}. 
+Struktur tersebut berisi tabel prekomputasi \textit{ancestor} dan juga HashTable untuk pemetaan sesuai yang dijelaskan pada \ref{section-lca-design},
+\begin{minted}{rust}
+    pub struct BinaryLiftMetadata {
+        ancestors               : Vec<Vec<usize>>,
+        max_precompute_height   : usize,
+        depth_map               : Vec<usize>, 
+        id_to_node_map          : Vec<Node>,
+        node_to_id_map          : HashMap<usize, usize>
+    }
+\end{minted} \\
+
+
+Dengan setiap struktur tersebut, diimplementasikan logika utama yang dibutuhkan untuk melakukan
+traversal DFS dan BFS secara parallel, dan LCA secara non-parallel,
+\begin{minted}{rust}
+    pub fn async_bfs(html_text: &str, css_query: &str, thread_num: usize) 
+        -> Option<Vec<Arc<Element>>>;
+
+    pub fn async_dfs(html_text: &str, css_query: &str, thread_num: usize) 
+        -> Option<Vec<Arc<Element>>>;
+
+    pub fn preprocess_tree(root: &Node) -> BinaryLiftMetadata;
+
+    pub fn find_lca(node1: &Node, node2: &Node, metadata: &BinaryLiftMetadata) -> Node;
+\end{minted}
+
+
+\subsubsection{Frontend Application}
+
+Implementasi aplikasi frontend dilakukan menggunakan \textit{library} \textbf{Yew}, 
+yang digabungkan dengan \textit{framework} \textbf{Tailwind CSS}. \\
+
+Detail implementasi meliputi beberapa file berikut:
+\begin{itemize}
+    \item \textbf{bindings.rs}, file ini berisi \textit{binding} untuk fungsi terkait Web Assembly.
+    \item \textbf{canvas\_tree.rs}, file ini berisi logika penggambaran DOM Tree dalam antarmuka pengguna.
+    \item \textbf{html\_input.rs}, file ini berisi \textit{handler} masukan HTML, baik melalui file ataupun scraping.
+    \item \textbf{left\_section.rs}, file ini berisi \textit{handler} untuk bagian panel antarmuka di bagian kiri.
+    \item \textbf{right\_section.rs}, file ini berisi \textit{handler} untuk bagian panel antarmuka di bagian kanan.
+    \item \textbf{js\_util.rs}, file ini berisi fungsi JavaScript pembantu tampilan.
+    \item \textbf{result\_player.rs}, file ini berisi logika penayangan animasi yang berkaitan dengan traversal.
+    \item \textbf{main.rs}, file ini berisi pemanggilan fungsi utama dari \textit{framework frontend} \textbf{Yew}.
+\end{itemize} \\
+
+Aplikasi frontend akan mengirim input melalui HTTP Request ke server, kemudian server akan memproses request tersebut.
+Jika server menerima parameter URL maka akan dianggap sebagai perintah untuk melakukan \textit{web scraping}. \\
+
+\begin{minted}{rust}
+    #[derive(Serialize)]
+    struct QueryPostBody {
+        input_type: String,
+        css_query: String,
+        file_payload: String,
+        url_payload: String,
+        text_payload: String,
+        use_dfs: bool,
+    }
+\end{minted} \\
+
+Kemudian hasil dari \textit{web scraping} akan dikirim ke \textit{handler} CSS Selector, dan dilanjutkan ke traversal utama.
+Hasil dari traversal tersebut disimpan dalam sebuah struktur yang menyimpan setiap paths sebagai path dari akar lokal ke setiap simpul yg ditemukan, \\
+
+\begin{minted}{rust}
+    #[derive(Clone, PartialEq)]
+    pub struct ResultItem {
+        pub query: String,
+        pub paths: Vec<Vec<u32>>,
+        pub selected: Vec<u32>,
+        pub traversal_path: Vec<u32>,
+    }
+\end{minted} \\
+
+Atribut \textit{selected} memiliki arti index simpul yg ditemukan,
+dan \textit{traversal path} adalah gabungan dari semua path yg dilalui pada suatu step dimana 
+ketika ada index simpul yang sama artinya terjadi \textit{backtracking}. \\
+
+\subsubsection{Deployment}
+
+
 
 \subsection{Pengujian}
 
@@ -1121,7 +1349,9 @@ Tugas ini disusun sepenuhnya tanpa bantuan kecerdasan buatan (\textit{Generative
 
 \section*{Lampiran}
 
-Repository Github: \\ \url{https://github.com/FieryBanana101/Tubes2_kata-josh-nama-timnya-jangan-ini} 
+Repository Github: \\ \url{https://github.com/FieryBanana101/Tubes2_kata-josh-nama-timnya-jangan-ini} \\
+
+Deployed Web: \\ \url{https:://} \\
 
 \begin{table}[h]
     \centering
