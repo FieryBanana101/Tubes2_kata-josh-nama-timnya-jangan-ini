@@ -463,7 +463,7 @@ Selain itu, BFS juga memiliki properti-properti berikut ini \cite{stima-graph-2}
     \item Memiliki heuristik untuk kurang baik dalam kompleksitas ruang.
 \end{itemize} \\
 
-\subsection{Lowest Common Ancestor}
+\subsection{Lowest Common Ancestor} \label{section-lca}
 
 Misalnya $G = (V, E)$ adalah sebuah graf berbentuk tree dengan $V$ adalah himpunan simpul dan $E$ adalah himpunan sisi,
 akar dari $G$ adalah suatu simpul tertentu yang dipilih sebagai simpul paling atas dengan \textit{depth} bernilai nol,
@@ -517,7 +517,7 @@ Selain itu ada banyak teknik untuk mencari solusi LCA, diantaranya yaitu \cite{c
     \item Algoritma Offline Tarjan
 \end{itemize} \\
 
-\subsection{Binary Lifting}
+\subsection{Binary Lifting} \label{section-binlift}
 
 Misalnya $G = (V, E)$ adalah sebuah graf berbentuk tree dengan $V$ adalah himpunan simpul, $E$ adalah himpunan sisi dan $N$ adalah banyaknya simpul pada $G$. \\
 
@@ -687,7 +687,7 @@ HTML menggunakan elemen spesial untuk mendeskripsikan konten, elemen tersebut di
 Sebuah HTML Element dibedakan dari teks biasa dengan menggunakan \textit{tags}, yaitu nama elemen tersebut yang dikelilingi oleh karakter '<' dan '>'.
 Nama dari HTML Element bersifat \textit{case-insensitive}. Sebuah dokumen HTML selalu memiliki elemen pertama dengan nama elemen "html".
 Adapun beberapa elemen spesial lainnya yang terdefinisi dalam spesifikasi HTML yaitu \cite{mozilla-html},
-\begin{minted}
+\begin{minted}{html}
     <head>
     <title>
     <body>
@@ -949,12 +949,131 @@ dan lain sebagainya. \\
 
 \section{Aplikasi DFS dan BFS}
 
+Pada permasalahan ini kita diberikan sebuah DOM Tree dan CSS Selector yang mendeskripsikan subhimpunan dari himpunan semua simpul DOM Tree tersebut.
+Pada dasarnya, kita perlu mencari subhimpunan tersebut melalui algoritma traversal graf klasik, dimana traversal dilakukan dengan mengecek sebuah fungsi validasi pada setiap simpul. \\
+
+Algoritma DFS dan BFS dapat sangat berguna disini, karena algoritma tersebut memenuhi properti \textit{completeness} yang menjamin solusi subhimpunan pasti ditemukan.
+
+
+\subsection{Perancangan DFS dan BFS}
+Perancangan algoritma DFS dan BFS perlu diperhatikan dengan tepat karena perlu memperhatikan hal-hal berikut,
+\begin{itemize}
+    \item Perilaku Multi-threading
+    \item Perilaku Combinator
+    \item Perilaku Selector List dibanding Complex Selector biasa
+\end{itemize} \\
+
+
+\subsubsection{Perilaku Multi-Threading}
+
+Terdapat tantangan tersendiri dalam implementasi traversal DOM Tree. Umumnya desain implementasi yang palint mudah (dan naif) yaitu
+dengan membuat implementasi DFS secara rekursif, dimana pada setiap rekursi akan dibuat thread yang baru. \\
+
+Akan tetapi cara tersebut sangat buruk karena untuk memanfaatkan parallelisme secara maksimal, 
+jumlah thread yang harus dibuat harus sama dengan jumlah \textit{core} pada CPU pengguna. \\
+
+Sehingga pilihan desain paling tepat yaitu untuk membuat algoritma iteratif menggunakan struktur data global yang \textit{thread-safe},
+struktur data global tersebut akan menyimpan sebuah struktur yang mendeskripsikan tugas yang bisa dilakukan sebuah \textit{thread} saat mengunjungi DOM Tree tertentu. \\
+
+Sehingga konsep  algoritma yang akan digunakan yaitu,
+\begin{itemize}
+    \item Sebuah thread utama akan menginisialisasi semua struktur data, dan memasukkan "tugas" pertama pada struktur data global
+    \item Setiap thread anak akan berusaha mengambil "tugas" dari struktur data global (tugas untuk mengunjungi suatu simpul dan memprosesnya)
+    \item Tugas yang dilakukan thread anak akan juga memasukkan "tugas" baru ke struktur data global (yaitu tugas untuk mengunjungi anak dari simpul saat ini)
+    \item Setiap thread akan melakukan \textit{busy-waiting} jika struktur data global kosong hingga dia mendapat tugas
+    \item Setiap thread yang sudah mendapat tugas akan ditandai sebagai aktif, dan jika tugasnya selesai maka ditandai non-aktif
+    \item Setiap thread akan berhenti jika struktur data global kosong dan tidak ada thread lagi yang ditandai sebagai aktif
+\end{itemize} \\
+
+
+Perlu diperhatikan bahwa tipe struktur data global akan mempengaruhi tipe traversal. 
+Jika digunakan \textit{stack} maka akan menjadi DFS, dan jika digunakan \textit{queue} maka menjadi BFS. \\
+
+
+\subsubsection{Perilaku Combinator}
+
+CSS Selector dapat memiliki beberapa Combinator (mungkin nol dan mungkin lebih dari satu), 
+perbedaan tipe Combinator akan menyebabkan perbedaan perilaku \textit{branching} dalam traversal, baik itu untuk DFS ataupun BFS. \\
+
+Setiap mengunjungi sebuah simpul dalam DFS/BFS, kita tentunya butuh selector saat ini yang akan di-cocokkan dengan simpul yang dikunjungi.
+Perlu diperhatikan beberapa observasi perilaku berikut ini terhadap combinator yang berada sebelum selector saat ini,
+\begin{enumerate}
+    \item Untuk combinator tipe Descendant (' '), maka selector saat ini akan diteruskan ke semua simpul anak kecuali combinator dari selector selanjutnya juga Descendant (' ').
+    \item Untuk combinator tipe Child ('>'), jika simpul saat ini cocok dengan selector saat ini maka selector selanjutnya akan diteruskan ke simpul anak, selain itu tidak ada selector yang dilanjutkan ke simpul anak
+    \item Untuk combinator tipe SubsequentSibling ('~'), maka selector saat ini akan diteruskan ke simpul saudara selanjutnya kecuali combinator dari selector selanjutnya juga SubsequentSibling ('~').
+    \item Untuk combinator tipe NextSibling ('+'), jika simpul saat ini cocok dengan selector saat ini maka selector selanjutnya akan diteruskan ke simpul saudara selanjutnya, selain itu tidak ada selector yang dilanjutkan ke simpul saudara.
+    \item Jika sebelumnya tidak ada combinator, maka lakukan perliaku seakan combinator sebelumnya adalah Descendant (' ').
+\end{enumerate} \\
+
+Untuk mempermudah implementasi perilaku combinator yang berhubungan dengan \textit{sibling} dari simpul saat ini,
+maka untuk setiap kunjungan ke suatu simpul akan disimpan \textit{pointer} ke \textit{parent} dari simpul tersebut,
+dan juga posisi urutan relatif simpul tersebut terhadap anak-anak lain dari \textit{parent}.
+
+
+\subsubsection{Perilaku Selector List}
+
+Kueri untuk CSS Selector dapat berupa sebuah Selector List yang merupakan kumpulan CSS Selector yang dipisahkan oleh koma. \\
+
+Perlu diperhatikan bahwa perilaku setiap simpul terhadap Selector List tersebu yaitu, jika setidaknya terdapat satu CSS Selector diantar Selector List
+tersebut yang cocok terhadap simpul tersebut, maka simpul dianggap cocok. \\
+
+\begin{minted}{css}
+    div > li, p ~ a + span, body
+\end{minted} \\
+
+Oleh karena itu, operasi tersebut identik dengan operasi gabungan himpunan.
+Dimana hasil pencocokan untuk sebuah Selector List adalah gabungan dari operasi pencocokan setiap CSS Selector pada Selector List tersebut. \\
+
+Observasi ini sangat penting karena terlihat bahwa operasi pencocokan dapat diparalelisasi untuk setiap CSS Selector yang dipisahkan koma,
+alias kita tidak perlu mencocokkan dari kiri ke kanan secara berurutan. Tetapi pada saat yang sama bisa langsung saja melakukan traversal BFS/DFS secara parallel terhadap setiap CSS Selector. \\
+
+Perilaku ini dapat kita manfaatkan dengan memasukkan tugas ke struktur data global berupa perintah mengunjungi
+simpul akar sebanyak $n$ kali, dimana $n$ adalah jumlah CSS Selector dalam Selector List, 
+dan setiap CSS Selector dimasukkan ke salah satu dari tugas tersebut. \\
+
+
+Sehingga algoritma traversal yang digunakan dapat digambarkan sebagai berikut,
+\begin{enumerate}
+    \item Buat sebuah struktur yang mendeskripsikan perintah kepada sebuah thread untuk mengunjungi sebuah simpul, struktur tersebut berisi [\textit{pointer} ke simpul tersebut, \textit{pointer} ke \textit{parent} simpul tersebut, posisi relatif simpul dalam urutan anak \textit{parent}, Unit CSS Selector saat ini].
+    \item Buat sebuah struktur global yang mampu menyimpan daftar struktur perintah dari (1), pastikan struktur global \textit{thread-safe} dan dapat dijangkau setiap thread.
+    \item Thread utama akan menginisiasi traversal dengan memasukkan perintah untuk mengunjungi simpul akar, dengan unit CSS Selector pertama, untuk setiap CSS Selector pada Selector List.
+    \item Setiap thread akan berlomba-lomba "menghabiskan" struktur data global, untuk setiap saat thread akan mengambil satu perintah dari situ dan menjalankannya (yang akan memasukkan perintah selanjutnya ke struktur global)
+    \item Jika struktur data global kosong, dan tidak ada thread yang sedang mengerjakan perintah, maka terminasi setiap thread dan kembalikan hasil traversal yang cocok.
+\end{enumerate} \\
+
+Dengan membuat struktur global sebagai LIFO (\textit{Last-in-first-out}) maka kita akan menjalankan DFS, 
+sedangkan jika FIFO (\textit{First-in-first-out}) maka akan berjalan BFS. Desain ini membuat kode cukup \textit{reusable} dan modular. \\
+
+
+\subsection{Perancangan LCA}
+
+LCA sesuai yang dijelaskan pada bagian \ref{section-lca} secara teknis merupakan traversal jenis DFS, 
+ada dua observasi yang dapat dilakukan untuk melakukan perancangan LCA,
+\begin{enumerate}  
+    \item setiap simpul pada tree pasti hanya memiliki satu \textit{parent}, sehingga untuk menuju \textit{ancestor} tertentu hanya terdapat satu jalur yang mendalam.
+    \item untuk menghitung $LCA(a, b, \dots, z)$ perlu dihitung $LCA(LCA(LCA(a, b), c), \dots)$ sehingga untuk pekerjaan mencari $LCA$ dengan masukan lebih dari satu tetap diperlukan iterasi dua-pasang secara rekursif.
+\end{enumerate} \\
+
+Karena kedua fakta tersebut maka jelas bahwa operasi LCA tidak bisa menjadi parallel, dan lebih baik di desain agar tidak menggunakan \textit{mult-threading}. 
+Sehingga untuk efisiensi dapat kita gunakan teknik \textit{binary lifting} sesuai bagian \ref{section-binlift}. \\
+
+Tetapi masalah yang harus dihadapi yaitu bagaimana cara memetakan isi simpul DOM Tree menjadi simpul berisi angka saja,
+hal ini perlu dilakukan karena teknik \textit{binary lifting} membutuhkan simpul berupa elemen yang dapat diidentifikasi secara unik dan terurut, seperti bilangan bulat
+(hal tersebut konsekuensi dari paradigma teknik \textit{binary lifting} yang merupakan \textit{dynamic programming}). \\
+
+Solusi terbaik yang dapat dilakukan yaitu untuk memetakan \textit{pointer} setiap simpul DOM Tree menjadi sebuah bilangan bulat melalu struktur data HashTable,
+Hal ini dapat bekerja karena pastilah \textit{pointer} untuk setiap objek dinamis akan berbeda, sehingga dapat menjadi pemetaan. \\
+
+Setelah memecahkan masalah-masalah tersebut, desain algoritma dapat langsung mengikuti secara persis seperti teori yang telah dijelaskan pada \ref{section-lca} \ref{section-binlift}.
 
 \pagebreak
+
 
 \section{Implementasi dan Pengujian}
 
 \subsection{Implementasi}
+
+\subsubsection{}
 
 \subsection{Pengujian}
 
@@ -966,6 +1085,97 @@ dan lain sebagainya. \\
 \subsection{Kesimpulan}
 
 \subsection{Saran}
+
+
+\pagebreak
+
+
+\section*{Pernyataan Orisinilitas}
+Tugas ini disusun sepenuhnya tanpa bantuan kecerdasan buatan (\textit{Generative AI}), melainkan hasil pemikiran dan analisis mandiri.
+
+\begin{flushright}
+    \vspace{0.5cm}
+    \includegraphics[width=3cm]{ttd-fatih.png} \\
+    \rule{5cm}{0.4pt} \\
+    \vspace{0.5cm}
+    Muhammad Fatih Irkham Mauludi (13524004)
+\end{flushright}
+
+\begin{flushright}
+    \vspace{0.5cm}
+    \includegraphics[width=3cm]{ttd-josh.png} \\
+    \rule{5cm}{0.4pt} \\
+    \vspace{0.5cm}
+    Josh Reinhart Zidik (13524048)
+\end{flushright}
+
+\begin{flushright}
+    \vspace{0.5cm}
+    \includegraphics[width=3cm]{ttd-cikang.png} \\
+    \rule{5cm}{0.4pt} \\
+    \vspace{0.5cm}
+    Jingglang Galih Rinenggan (13524095)
+\end{flushright}
+
+\pagebreak
+
+\section*{Lampiran}
+
+Repository Github: \\ \url{https://github.com/FieryBanana101/Tubes2_kata-josh-nama-timnya-jangan-ini} 
+
+\begin{table}[h]
+    \centering
+    \caption{Checklist hasil}
+    \begin{tabular}{|c|p{12cm}|c|c|}
+        \hline
+        \textbf{No} & \textbf{Poin} & \textbf{Ya} & \textbf{Tidak} \\
+        \hline
+        1. & Aplikasi berhasil di kompilasi tanpa kesalahan & \checkmark & &
+        \hline
+        2. & Aplikasi berhasil dijalankan & \checkmark & &
+        \hline
+        3. & Aplikasi dapat menerima input URL web, pilihan algoritma, CSS selector, dan jumlah hasil & \checkmark & &
+        \hline
+        4. & Aplikasi dapat melakukan scraping terhadap web pada input & \checkmark & &
+        \hline
+        5. & Aplikasi dapat menampilkan visualisasi pohon DOM & \checkmark & & 
+        \hline
+        6. & Aplikasi dapat menelusuri pohon DOM dan menampilkan hasil penelusuran & \checkmark & & 
+        \hline
+        7. & Aplikasi dapat menandai jalur tempuh oleh algoritma  &  \checkmark & &
+        \hline
+        8. & Aplikasi dapat menyimpan jalur yang ditempuh algoritma dalam traversal log  &  \checkmark & &
+        \hline
+        9. & [Bonus] Membuat video  &  & \checkmark &
+        \hline
+        10. & [Bonus] Deploy aplikasi  &  \checkmark & &
+        \hline
+        11. & [Bonus] Implementasi animasi pada penelusuran pohon  & \checkmark & &
+        \hline
+        12. & [Bonus] Implementasi multithreading  & \checkmark & &
+        \hline
+        13. &  [Bonus] Implementasi LCA Binary Lifting & \checkmark& &
+        \hline
+    \end{tabular}
+\end{table}
+
+
+\begin{table}[h]
+    \centering
+    \caption{Pembagian Tugas Kelompok}
+    \begin{tabular}{|c|p{5cm}|c|c|}
+        \hline
+        \textbf{No} & \textbf{Anggota} & \textbf{Detail Tugas} & \textbf{Presentase Keseluruhan} \\
+        \hline
+        1. & Muhammad Fatih Irkham Mauludi (13524004) & & &
+        \hline
+        2. & Josh Reinhart Zidik (13524048) & & &
+        \hline
+        3. & Jingglang Galih Rinenggan (13524095) & & &
+        \hline
+    \end{tabular}
+\end{table}
+
 
 \pagebreak
 
@@ -1051,7 +1261,7 @@ Barney, Blaise. "Introduction to Parallel Computing Tutorial" Tutorials, Livermo
 
 
 \bibitem{os-book}
-the os book from univ
+Silberschatz, Abraham, Peter B. Galvin, and Greg Gagne. Operating System Concepts. 9th ed., Wiley, 2012.
 
 
 \bibitem{client-server}
@@ -1069,100 +1279,7 @@ Martin, Enrico. "Virtualization and Containerization". 2021, Final Thesis, 2021,
 \url{https://unitesi.unive.it/retrieve/cc1c017f-1a66-443d-b375-a0adc1e0fba1/815635-84509.pdf}. Accessed 21 April 2026. \\
 
 
-
-
 \end{thebibliography}
-
-\pagebreak
-
-
-\section*{Pernyataan Orisinilitas}
-Tugas ini disusun sepenuhnya tanpa bantuan kecerdasan buatan (\textit{Generative AI}), melainkan hasil pemikiran dan analisis mandiri.
-
-\begin{flushright}
-    \vspace{0.5cm}
-    \includegraphics[width=3cm]{ttd-fatih.png} \\
-    \rule{5cm}{0.4pt} \\
-    \vspace{0.5cm}
-    Muhammad Fatih Irkham Mauludi (13524004)
-\end{flushright}
-
-\begin{flushright}
-    \vspace{0.5cm}
-    \includegraphics[width=3cm]{ttd-josh.png} \\
-    \rule{5cm}{0.4pt} \\
-    \vspace{0.5cm}
-    Josh Reinhart Zidik (13524048)
-\end{flushright}
-
-\begin{flushright}
-    \vspace{0.5cm}
-    \includegraphics[width=3cm]{ttd-cikang.png} \\
-    \rule{5cm}{0.4pt} \\
-    \vspace{0.5cm}
-    Jingglang Galih Rinenggan (13524095)
-\end{flushright}
-
-\pagebreak
-
-\section*{Lampiran}
-
-Repository Github: \\ \url{https://github.com/FieryBanana101/Tubes2_kata-josh-nama-timnya-jangan-ini} 
-
-\begin{table}[h]
-    \centering
-    \caption{Checklist hasil}
-    \begin{tabular}{|c|p{12cm}|c|c|}
-        \hline
-        \textbf{No} & \textbf{Poin} & \textbf{Ya} & \textbf{Tidak} \\
-        \hline
-        1. & Aplikasi berhasil di kompilasi tanpa kesalahan & & &
-        \hline
-        2. & Aplikasi berhasil dijalankan &  & &
-        \hline
-        3. & Aplikasi dapat menerima input URL web, pilihan algoritma, CSS selector, dan jumlah hasil & & &
-        \hline
-        4. & Aplikasi dapat melakukan scraping terhadap web pada input  & & &
-        \hline
-        5. & Aplikasi dapat menampilkan visualisasi pohon DOM & & & 
-        \hline
-        6. & Aplikasi dapat menelusuri pohon DOM dan menampilkan hasil penelusuran & & & 
-        \hline
-        7. & Aplikasi dapat menandai jalur tempuh oleh algoritma  &  & &
-        \hline
-        8. & Aplikasi dapat menyimpan jalur yang ditempuh algoritma dalam traversal log  &  & &
-        \hline
-        9. & [Bonus] Membuat video  &  & &
-        \hline
-        10. & [Bonus] Deploy aplikasi  &  & &
-        \hline
-        11. & [Bonus] Implementasi animasi pada penelusuran pohon  &  & &
-        \hline
-        12. & [Bonus] Implementasi multithreading  &  & &
-        \hline
-        13. &  [Bonus] Implementasi LCA Binary Lifting &  & &
-        \hline
-    \end{tabular}
-\end{table}
-
-
-\begin{table}[h]
-    \centering
-    \caption{Pembagian Tugas Kelompok}
-    \begin{tabular}{|c|p{5cm}|c|c|}
-        \hline
-        \textbf{No} & \textbf{Anggota} & \textbf{Detail Tugas} & \textbf{Presentase Keseluruhan} \\
-        \hline
-        1. & Muhammad Fatih Irkham Mauludi (13524004) & & &
-        \hline
-        2. & Josh Reinhart Zidik (13524048) & & &
-        \hline
-        3. & Jingglang Galih Rinenggan (13524095) & & &
-        \hline
-    \end{tabular}
-\end{table}
-
-\pagebreak
 
 
 \end{document}
