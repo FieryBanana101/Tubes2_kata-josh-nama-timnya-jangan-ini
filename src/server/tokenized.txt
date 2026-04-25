@@ -1,0 +1,26 @@
+StartToken(html)
+StartToken(head)
+StartToken(title)
+Example Domain
+EndToken(title)
+SelfClosingToken(meta)
+StartToken(style)
+body{background:#eee;width:60vw;margin:15vh auto;font-family:system-ui,sans-serif}h1{font-size:1.5em}div{opacity:0.8}a:link,a:visited{color:#348}
+EndToken(style)
+EndToken(head)
+StartToken(body)
+StartToken(div)
+StartToken(h1)
+Example Domain
+EndToken(h1)
+StartToken(p)
+This domain is for use in documentation examples without needing permission. Avoid use in operations.
+EndToken(p)
+StartToken(p)
+StartToken(a)
+Learn more
+EndToken(a)
+EndToken(p)
+EndToken(div)
+EndToken(body)
+EndToken(html)

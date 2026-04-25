@@ -290,27 +290,16 @@ pub fn ResultPlayer(props: &ResultPlayerProps) -> Html {
     html! {
         <div class="border-t border-black flex flex-col gap-4 hidden data-[open=true]:block" data-open={props.is_open.to_string()}>
             <div class="flex flex-col gap-2 px-4 py-2">
-                <div class="flex flex-row justify-around p-2">
-                    {for props.result_data.iter().enumerate().map(|(i, item)| {
-                        html! {
-                            <div class="p-2 border-b border-gray-300">
-                                <p class="font-bold">
-                                    {"Query "}
-                                    {i + 1}
-                                    {": "}
-                                    {&item.query}
-                                </p>
-                            </div>
-                        }
-                    })}
-                </div>
                 <div class="flex flex-row px-4 py-2 justify-between items-center">
                     <button onclick={handle_prev} class="px-2 py-1 bg-gray-300">{"Prev"}</button>
                     <div class="flex flex-col items-center">
-                        <span>{format!("Step: {}/{}", current_step + 1, total_steps)}</span>
-                        <span>{format!("Sub-step: {}/{}", current_sub_step + 1, total_sub_steps)}</span>
+                        {props.result_data.get(current_step as usize).map(|r| html! { <p>{r.query.clone()}</p> }).unwrap_or_default()}
                     </div>
                     <button onclick={handle_next} class="px-2 py-1 bg-gray-300">{"Next"}</button>
+                </div>
+                <div class="flex flex-row justify-around">
+                    <span>{format!("Step: {}/{}", current_step + 1, total_steps)}</span>
+                    <span>{format!("Sub-step: {}/{}", current_sub_step + 1, total_sub_steps)}</span>
                 </div>
                 <div class="flex flex-row justify-center gap-2 p-2">
                     <button onclick={handle_speed_down} class="px-4 py-1 bg-blue-500 text-white">{"/2"}</button>

@@ -6,7 +6,7 @@ use serde::Deserialize;
 use web_sys::{HtmlInputElement, js_sys::futures::spawn_local};
 use yew::prelude::*;
 
-use crate::{GraphContext, html_input::HtmlInput, result_player::{ResultPlayer, ResultItem}};
+use crate::{GraphContext, GraphAction, html_input::HtmlInput, result_player::{ResultPlayer, ResultItem}};
 
 #[derive(Serialize)]
 struct QueryPostBody {
@@ -165,7 +165,7 @@ pub fn LeftSection() -> Html {
                 if let Some(text_input) = text_input_ref.cast::<HtmlInputElement>() {
                     text_input.set_value("");
                 }
-                ctx.dispatch("".to_string());
+                ctx.dispatch(GraphAction::SetGraphData("".to_string()));
             } else {
                 if let (Some(url_input), Some(text_input)) = (
                     url_input_ref.cast::<HtmlInputElement>(),
@@ -188,7 +188,8 @@ pub fn LeftSection() -> Html {
                             .await
                             .unwrap();
                         if res.ok() {
-                            ctx.dispatch(res.text().await.unwrap());
+                            let response_text = res.text().await.unwrap();
+                            ctx.dispatch(GraphAction::SetGraphData(response_text));
                         }
                     });
                 }

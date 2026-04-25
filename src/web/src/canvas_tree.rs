@@ -1,9 +1,9 @@
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
-use web_sys::js_sys::{Array, Function, Reflect, JSON};
-use web_sys::{Document, Element, HtmlElement};
+use web_sys::js_sys::{Array, Reflect, JSON};
+use web_sys::{Document, Element, WheelEvent};
 use yew::prelude::*;
 
-use crate::bindings::{alert, d3_hierarchy, d3_tree};
+use crate::bindings::{alert, d3_hierarchy, d3_select, d3_tree, d3_zoom};
 use crate::js_util::*;
 use crate::GraphContext;
 
@@ -28,6 +28,7 @@ struct RenderNode {
     class_name: String,
     id_attr: String,
     node_index: i32,
+    attributes: Vec<(String, String)>,
 }
 
 #[derive(Clone)]
@@ -48,8 +49,16 @@ pub fn CanvasTree() -> Html {
         || ()
     });
 
+    let onwheel = Callback::from(|e: WheelEvent| {
+        e.prevent_default();
+    });
+
     html! {
-        <div id={TREE_CONTAINER_ID} class="h-screen w-screen w-full overflow-auto"></div>
+        <div
+            id={TREE_CONTAINER_ID}
+            class="h-screen w-screen w-full overflow-hidden"
+            onwheel={onwheel}
+        ></div>
     }
 }
 
@@ -65,12 +74,7 @@ fn render_tree(raw_json: &str) {
     };
 
     let raw_json = if raw_json.trim().is_empty() {
-        "{
-            \"root_index\": -1,
-            \"nodes\": [],
-            \"results\": [],
-            \"selected_nodes\": []
-        }"
+        "{\"root_index\": -1, \"nodes\": [], \"results\": [], \"selected_nodes\": []}"
     } else {
         raw_json
     };
@@ -106,6 +110,10 @@ fn render_tree(raw_json: &str) {
     if let Err(msg) = draw_svg(&document, &container, &layout) {
         alert(&msg);
     }
+
+    if let Err(msg) = setup_d3_zoom(&document, &container, layout.width, layout.height) {
+        web_sys::console::error_1(&JsValue::from_str(&msg));
+    }
 }
 
 struct LayoutResult {
@@ -113,8 +121,6 @@ struct LayoutResult {
     links: Vec<RenderLink>,
     width: f64,
     height: f64,
-    offset_x: f64,
-    offset_y: f64,
 }
 
 fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<LayoutResult, String> {
@@ -130,8 +136,6 @@ fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<Layou
             links: vec![],
             width: 0.0,
             height: 0.0,
-            offset_x: 0.0,
-            offset_y: 0.0,
         });
     }
 
@@ -172,7 +176,9 @@ fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<Layou
 
     let hierarchy_root = d3_hierarchy(
         &root_node_data,
-        children_accessor.as_ref().unchecked_ref::<Function>(),
+        children_accessor
+            .as_ref()
+            .unchecked_ref::<web_sys::js_sys::Function>(),
     );
 
     let tree_layout = d3_tree();
@@ -182,7 +188,7 @@ fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<Layou
     let _ = call_method1(&tree_layout, "nodeSize", &node_size.into())?;
 
     let tree_function = tree_layout
-        .dyn_ref::<Function>()
+        .dyn_ref::<web_sys::js_sys::Function>()
         .ok_or_else(|| "d3.tree() did not return a callable".to_string())?;
     let _ = tree_function.call1(&JsValue::NULL, &hierarchy_root);
 
@@ -216,6 +222,19 @@ fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<Layou
         let id_attr = get_string_field(&data, "id").unwrap_or_default();
         let node_index = get_number_field(&data, "index").unwrap_or(i as f64) as i32;
 
+        let attrs_value =
+            Reflect::get(&data, &JsValue::from_str("attributes")).unwrap_or(JsValue::NULL);
+        let attrs_array = Array::from(&attrs_value);
+        let mut attributes: Vec<(String, String)> = Vec::new();
+        for j in 0..attrs_array.length() {
+            let attr = attrs_array.get(j);
+            let key = get_string_field(&attr, "0").unwrap_or_default();
+            let val = get_string_field(&attr, "1").unwrap_or_default();
+            if !key.is_empty() {
+                attributes.push((key, val));
+            }
+        }
+
         nodes.push(RenderNode {
             x,
             y,
@@ -223,6 +242,7 @@ fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<Layou
             class_name,
             id_attr,
             node_index,
+            attributes,
         });
     }
 
@@ -240,11 +260,11 @@ fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<Layou
     }
 
     let container_width = container
-        .dyn_ref::<HtmlElement>()
+        .dyn_ref::<web_sys::HtmlElement>()
         .map(|v| v.client_width() as f64)
         .unwrap_or(0.0);
     let container_height = container
-        .dyn_ref::<HtmlElement>()
+        .dyn_ref::<web_sys::HtmlElement>()
         .map(|v| v.client_height() as f64)
         .unwrap_or(0.0);
 
@@ -256,8 +276,6 @@ fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<Layou
         links,
         width: container_width.max(graph_width),
         height: container_height.max(graph_height),
-        offset_x: PADDING_LEFT - y_min,
-        offset_y: PADDING_TOP - x_min,
     })
 }
 
@@ -266,17 +284,49 @@ fn draw_svg(document: &Document, container: &Element, layout: &LayoutResult) -> 
         .create_element_ns(Some(SVG_NS_URL), "svg")
         .map_err(|_| "Failed to create svg".to_string())?;
     svg.set_attribute("width", &layout.width.to_string())
-        .map_err(|_| "Failed to set attribute.".to_string())?;
+        .map_err(|_| "Failed to set width.".to_string())?;
     svg.set_attribute("height", &layout.height.to_string())
-        .map_err(|_| "Failed to set attribute.".to_string())?;
-    svg.set_attribute("style", "display:block;")
-        .map_err(|_| "Failed to set attribute.".to_string())?;
+        .map_err(|_| "Failed to set height.".to_string())?;
+    svg.set_attribute("id", "graph-svg")
+        .map_err(|_| "Failed to set svg id.".to_string())?;
+
+    let view = document
+        .create_element_ns(Some(SVG_NS_URL), "rect")
+        .map_err(|_| "Failed to create view rect.".to_string())?;
+    view.set_attribute("class", "view")
+        .map_err(|_| "Failed to set view class.".to_string())?;
+    view.set_attribute("x", "0.5")
+        .map_err(|_| "Failed to set view x.".to_string())?;
+    view.set_attribute("y", "0.5")
+        .map_err(|_| "Failed to set view y.".to_string())?;
+    let view_w = if layout.width > 1.0 {
+        layout.width - 1.0
+    } else {
+        layout.width
+    };
+    let view_h = if layout.height > 1.0 {
+        layout.height - 1.0
+    } else {
+        layout.height
+    };
+    view.set_attribute("width", &view_w.to_string())
+        .map_err(|_| "Failed to set view width.".to_string())?;
+    view.set_attribute("height", &view_h.to_string())
+        .map_err(|_| "Failed to set view height.".to_string())?;
+    let _ = svg.append_child(&view);
+
+    let g = document
+        .create_element_ns(Some(SVG_NS_URL), "g")
+        .map_err(|_| "Failed to create group".to_string())?;
+    g.set_attribute("class", "zoom-group")
+        .map_err(|_| "Failed to set group class".to_string())?;
+    let _ = svg.append_child(&g);
 
     for link in &layout.links {
-        let start_x = layout.offset_x + link.source_y + (CARD_WIDTH / 2.0);
-        let start_y = layout.offset_y + link.source_x;
-        let end_x = layout.offset_x + link.target_y + (CARD_WIDTH / 2.0);
-        let end_y = layout.offset_y + link.target_x;
+        let start_x = link.source_y + (CARD_WIDTH / 2.0);
+        let start_y = link.source_x;
+        let end_x = link.target_y + (CARD_WIDTH / 2.0);
+        let end_y = link.target_x;
         let control_x = (start_x + end_x) / 2.0;
         let d = format!(
             "M {:.2} {:.2} C {:.2} {:.2}, {:.2} {:.2}, {:.2} {:.2}",
@@ -296,12 +346,12 @@ fn draw_svg(document: &Document, container: &Element, layout: &LayoutResult) -> 
             .map_err(|_| "Failed to set link width.".to_string())?;
         path.set_attribute("stroke-opacity", "0.75")
             .map_err(|_| "Failed to set link opacity.".to_string())?;
-        let _ = svg.append_child(&path);
+        let _ = g.append_child(&path);
     }
 
     for node in &layout.nodes {
-        let x = layout.offset_x + node.y;
-        let y = layout.offset_y + node.x - (CARD_HEIGHT / 2.0);
+        let x = node.y;
+        let y = node.x - (CARD_HEIGHT / 2.0);
 
         let foreign_object = document
             .create_element_ns(Some(SVG_NS_URL), "foreignObject")
@@ -327,31 +377,105 @@ fn draw_svg(document: &Document, container: &Element, layout: &LayoutResult) -> 
         let id_attr = (!node.id_attr.is_empty())
             .then(|| node.id_attr.clone())
             .unwrap_or("-".into());
+        let node_id = "graph-node-".to_string() + &node.node_index.to_string();
+
+        let onclick = format!("window.selectNode({})", node.node_index);
+
+        let mut attrs_json = String::from("[");
+        for (i, (k, v)) in node.attributes.iter().enumerate() {
+            if i > 0 {
+                attrs_json.push_str(",");
+            }
+            attrs_json.push_str(&format!(r#"["{}","{}"]"#, k, v));
+        }
+        attrs_json.push_str("]");
 
         let html = format!(
-            "<div data-state='not-visited' id='{id}' class='graph-node data-[state=visited]:bg-gray-200 data-[state=intermediate]:bg-yellow-400 data-[state=selected]:bg-green-400 data-[state=current]:bg-blue-400 border-box border-2 rounded-lg bg-white p-2' style='width:{w}px;min-height:{h}px;'>\
+            "<div data-index='{idx}' data-tag='{tag}' data-class='{cls}' data-id='{id}' data-attributes='{attrs}' id='{node_id}' class='graph-node data-[state=visited]:bg-gray-200 data-[state=intermediate]:bg-yellow-400 data-[state=selected]:bg-green-400 data-[state=current]:bg-blue-400  cursor-pointer hover:bg-blue-50 border-box border-2 rounded-lg bg-white p-2' style='width:{w}px;min-height:{h}px;' onclick=\"{onclick}\">\
                <div class='flex justify-between items-center'>\
                  <span>&lt;{tag}&gt;</span>\
                </div>\
                <div class='overflow-scroll'>\
-                 <div style='white-space:nowrap;'><b>class</b>: {class_name}</div>\
-                 <div style='white-space:nowrap;'><b>id</b>: {id_attr}</div>\
+                 <div style='white-space:nowrap;'><b>class</b>: {cls}</div>\
+                 <div style='white-space:nowrap;'><b>id</b>: {id}</div>\
                </div>\
              </div>",
-            id = "graph-node-".to_string() + &node.node_index.to_string(),
+            node_id = node_id,
+            idx = node.node_index,
+            tag = node.tag,
+            cls = class_name,
+            id = id_attr,
+            attrs = attrs_json,
             w = CARD_WIDTH,
             h = CARD_HEIGHT,
-            tag = node.tag,
-            class_name = class_name,
-            id_attr = id_attr,
+            onclick = onclick,
         );
 
         card.set_inner_html(&html);
         let _ = foreign_object.append_child(&card);
-        let _ = svg.append_child(&foreign_object);
+        let _ = g.append_child(&foreign_object);
     }
 
     let _ = container.append_child(&svg);
+    Ok(())
+}
+
+fn setup_d3_zoom(
+    document: &Document,
+    _container: &Element,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    let Some(window) = web_sys::window() else {
+        return Err("No window".to_string());
+    };
+
+    let svg_element = document
+        .get_element_by_id("graph-svg")
+        .ok_or("SVG not found")?;
+
+    let zoom_obj = d3_zoom();
+
+    let scale_extent = Array::new();
+    scale_extent.push(&JsValue::from_f64(0.5));
+    scale_extent.push(&JsValue::from_f64(3.0));
+    let zoom_obj = call_method1(&zoom_obj, "scaleExtent", &scale_extent.into())
+        .map_err(|_| "Failed to set zoom scale extent.".to_string())?;
+
+    let translate_extent = Array::new();
+    let left = Array::new();
+    left.push(&JsValue::from_f64(-width * 2f64 - 100.0));
+    left.push(&JsValue::from_f64(-height * 2f64 - 100.0));
+    translate_extent.push(&left.into());
+    let right = Array::new();
+    right.push(&JsValue::from_f64(width * 2f64 + 100.0));
+    right.push(&JsValue::from_f64(height * 2f64 + 100.0));
+    translate_extent.push(&right.into());
+    let zoom_obj = call_method1(&zoom_obj, "translateExtent", &translate_extent.into())
+        .map_err(|_| "Failed to set zoom translate extent.".to_string())?;
+
+    // get global function named filter
+    let filter_func = Reflect::get(&window, &JsValue::from_str("filter"))
+        .map_err(|_| "Missing filter function.".to_string())?;
+    if filter_func.dyn_ref::<web_sys::js_sys::Function>().is_none() {
+        return Err("window.filter is not a function.".to_string());
+    }
+    let zoom_obj = call_method1(&zoom_obj, "filter", &filter_func)
+        .map_err(|_| "Failed to set zoom filter.".to_string())?;
+
+    let zoomed = Reflect::get(&window, &JsValue::from_str("zoomed"))
+        .map_err(|_| "Missing zoomed function.".to_string())?;
+    if zoomed.dyn_ref::<web_sys::js_sys::Function>().is_none() {
+        return Err("window.zoomed is not a function.".to_string());
+    }
+    let zoom_obj = call_method2(&zoom_obj, "on", &JsValue::from_str("zoom"), &zoomed)
+        .map_err(|_| "Failed to set zoom event.".to_string())?;
+
+    let selection = d3_select(&svg_element);
+
+    let _ = call_method1(&selection, "call", &zoom_obj.into())
+        .map_err(|_| "Failed to apply zoom to svg.".to_string())?;
+
     Ok(())
 }
 

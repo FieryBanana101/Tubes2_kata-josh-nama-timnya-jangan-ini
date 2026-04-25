@@ -1,11 +1,10 @@
-use std::{collections::HashMap, fs, io, fmt, sync::Arc};
-use html5gum::{Tokenizer, Token, HtmlString};
+use html5gum::{HtmlString, Token, Tokenizer};
 use reqwest;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
     Element(Arc<Element>),
-    Text(Arc<String>)
+    Text(Arc<String>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -45,7 +44,7 @@ pub struct Element {
 
 // pub async fn get_html(url: String) -> Result<String, reqwest::Error> {
 //     let res = reqwest::get(url).await?;
-    
+
 //     if let Some(ct) = res.headers().get("content-type") {
 //         println!("{:?}", ct);
 //     }
@@ -66,11 +65,35 @@ fn bounded(current: &str, incoming: &str) -> bool{
 
 fn closes_tag(current: &str, incoming: &str) -> bool{
     match current {
-        "p" => matches!(incoming, 
-            "address" | "article" | "aside" | "blockquote" | "div" | "dl" | 
-            "fieldset" | "figure" | "footer" | "form" | "header" |
-            "h1" |  "h2" | "h3" | "h4" | "h5" | "h6" | "hr" | "main" |
-            "nav" | "ol" | "p" | "pre" | "section" | "table" | "ul" ),
+        "p" => matches!(
+            incoming,
+            "address"
+                | "article"
+                | "aside"
+                | "blockquote"
+                | "div"
+                | "dl"
+                | "fieldset"
+                | "figure"
+                | "footer"
+                | "form"
+                | "header"
+                | "h1"
+                | "h2"
+                | "h3"
+                | "h4"
+                | "h5"
+                | "h6"
+                | "hr"
+                | "main"
+                | "nav"
+                | "ol"
+                | "p"
+                | "pre"
+                | "section"
+                | "table"
+                | "ul"
+        ),
         "li" => incoming == "li",
         "dt" => incoming == "dt" || incoming == "dd",
         "dd" => incoming == "dt" || incoming == "dd",
@@ -82,26 +105,32 @@ fn closes_tag(current: &str, incoming: &str) -> bool{
         "tfoot" => incoming == "tbody",
         "option" => incoming == "option" || incoming == "optgroup",
         "optgroup" => incoming == "optgroup",
-        _ => false
+        _ => false,
     }
 }
 
-fn htmlstring_to_string(str: &HtmlString) -> String{
+fn htmlstring_to_string(str: &HtmlString) -> String {
     return String::from_utf8_lossy(&str).to_string();
 }
 
-const VOID_TAGS: &[&str] = &["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"];
-const HEAD_TAGS: &[&str] = &["title", "base", "link", "style", "meta", "script", "noscript", "template"];
-pub fn parser(html: &str) -> Result<Arc<Element>, String> {
-
+const VOID_TAGS: &[&str] = &[
+    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
+    "track", "wbr",
+];
+const HEAD_TAGS: &[&str] = &[
+    "title", "base", "link", "style", "meta", "script", "noscript", "template",
+];
+pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal), String> {
     let mut output = "".to_string();
     let mut stack: Vec<Element> = Vec::new();
     let mut head_read = false;
     let mut root = Element {
         tag: "".to_string(),
         attributes: HashMap::new(),
-        children: Vec::new()
+        children: Vec::new(),
     };
+    let mut traversal = TokenizerTraversal { steps: Vec::new() };
+    let mut position = 0;
     for token in Tokenizer::new(html).infallible() {
         match token {
             Token::StartTag(tag) => {
@@ -111,25 +140,24 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
                     let mut node = Element {
                         tag: "html".to_string(),
                         attributes: HashMap::new(),
-                        children: Vec::new()
+                        children: Vec::new(),
                     };
                     stack.push(node);
                 }
-                if stack.len() == 1 && HEAD_TAGS.contains(&tag_string.as_str()){
+                if stack.len() == 1 && HEAD_TAGS.contains(&tag_string.as_str()) {
                     let mut node = Element {
                         tag: "head".to_string(),
                         attributes: HashMap::new(),
-                        children: Vec::new()
+                        children: Vec::new(),
                     };
                     head_read = true;
                     stack.push(node);
-                } 
-                else if stack.len() == 1 && tag_string != "head" && tag_string != "body" {
+                } else if stack.len() == 1 && tag_string != "head" && tag_string != "body" {
                     if !head_read {
                         let mut node = Element {
                             tag: "head".to_string(),
                             attributes: HashMap::new(),
-                            children: Vec::new()
+                            children: Vec::new(),
                         };
                         if let Some(parent) = stack.last_mut() {
                             parent.children.push(Node::Element(Arc::new(node)));
@@ -138,7 +166,7 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
                     let mut node = Element {
                         tag: "body".to_string(),
                         attributes: HashMap::new(),
-                        children: Vec::new()
+                        children: Vec::new(),
                     };
                     stack.push(node);
                 }
@@ -164,18 +192,25 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
                 if tag.self_closing || VOID_TAGS.contains(&tag_string.as_str()) {
                     println!("SelfClosingToken({})", &tag_string);
 
-                    let mut new_node = Element { 
-                        tag: tag_string.clone(), 
-                        attributes: HashMap::new(), 
-                        children: Vec::new() 
+                    traversal.steps.push(TokenizerStep {
+                        step_type: "start_tag".to_string(),
+                        tag: Some(tag_string.clone()),
+                        position,
+                    });
+                    position += 1;
+
+                    let mut new_node = Element {
+                        tag: tag_string.clone(),
+                        attributes: HashMap::new(),
+                        children: Vec::new(),
                     };
                     for (key, value) in tag.attributes.iter() {
                         if !new_node.attributes.contains_key(key) {
                             new_node.attributes.insert(htmlstring_to_string(key), htmlstring_to_string(value));
                         }
                     }
-                    
-                    if let Some(parent) = stack.last_mut(){
+
+                    if let Some(parent) = stack.last_mut() {
                         parent.children.push(Node::Element(Arc::new(new_node)));
                     }
 
@@ -183,10 +218,17 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
                 } else {
                     println!("StartToken({})", &tag_string);
 
-                    let mut new_node = Element { 
+                    traversal.steps.push(TokenizerStep {
+                        step_type: "start_tag".to_string(),
+                        tag: Some(tag_string.clone()),
+                        position,
+                    });
+                    position += 1;
+
+                    let mut new_node = Element {
                         tag: tag_string.clone(),
-                        attributes: HashMap::new(), 
-                        children: Vec::new() 
+                        attributes: HashMap::new(),
+                        children: Vec::new(),
                     };
                     for (key, value) in tag.attributes.iter() {
                         if !new_node.attributes.contains_key(key) {
@@ -228,13 +270,26 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
             Token::String(s) => {
                 let tag_string = htmlstring_to_string(&s);
                 let trimmed = tag_string.trim();
-                if trimmed.is_empty() { continue; }
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                traversal.steps.push(TokenizerStep {
+                    step_type: "text".to_string(),
+                    tag: Some(tag_string.clone()),
+                    position,
+                });
+                position += 1;
+
                 if let Some(parent) = stack.last_mut() {
-                    parent.children.push(Node::Text(Arc::new(tag_string.clone())));
+                    parent
+                        .children
+                        .push(Node::Text(Arc::new(tag_string.clone())));
                 }
-                println!(); 
-                    output.push_str(&tag_string); output.push('\n');
-                }
+                println!();
+                output.push_str(&tag_string);
+                output.push('\n');
+            }
             Token::Comment(tag) => {}
             Token::Doctype(_) => {}
             other => panic!("unexpected input: {:?}", other),
@@ -251,7 +306,7 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
         root = node;
     }
     fs::write("tokenized.txt", output).ok();
-    Ok(Arc::new(root))
+    Ok((Arc::new(root), traversal))
 }
 
 // #[tokio::main]
