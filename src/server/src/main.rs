@@ -7,6 +7,7 @@ mod traversal;
 mod async_util;
 mod tokenizer;
 mod matching;
+mod lca;
 
 #[derive(Serialize,Deserialize)]
 struct QueryPostBody {
