@@ -31,12 +31,12 @@ pub struct AttributeFilter {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PseudoFilter {
-    name: String,
-    args: Option<String>,
+    pub name: String,
+    pub args: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NodeFilter {
+pub struct SelectorUnit {
     pub namespace: Namespace,
     pub tag: Option<String>,
     pub ids: Option<Vec<String>>,
@@ -46,9 +46,9 @@ pub struct NodeFilter {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SelectorUnit {
+pub struct NodeFilter {
     pub prev_combinator: Option<Combinator>,
-    pub filter: NodeFilter,
+    pub selector: SelectorUnit,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,10 +80,6 @@ pub struct CssSelectorParser<'a> {
 }
 
 impl<'a> CssSelectorParser<'a> {
-    /*
-       Function to construct a new CssSelectorParser,
-       By default css selector is absolute unless it is needed to be relative
-    */
     #[inline(always)]
     pub fn new(input: &'a str, is_relative: bool) -> Self {
         CssSelectorParser {
@@ -101,10 +97,18 @@ impl<'a> CssSelectorParser<'a> {
         }
     }
 
-    /*
-       Log parsing related-error message to be shown when irrecoverable error happens,
-       if error is recoverable (when there is alternative valid syntax) then error message is kept hidden.
-    */
+    pub fn parse_all(&mut self) -> Vec<NodeFilter> {
+        let mut vec: Vec<NodeFilter> = Vec::new();
+        loop {
+            let (filter, is_eof) = self.advance().unwrap();
+            vec.push(filter);
+            if is_eof {
+                break;
+            }
+        }
+        vec
+    }
+
     #[inline(always)]
     fn log_parser_error(&mut self, message: &str) -> () {
         self.error_message.push_str(&format!(
@@ -113,9 +117,6 @@ impl<'a> CssSelectorParser<'a> {
         ));
     }
 
-    /*
-       Function acquire the next token from the CSS tokenizer
-    */
     fn next_token(&mut self) -> Result<(), ()> {
         self.css_lexer.current_start_pos = self.css_lexer.tokenizer.offset().into();
         self.css_lexer.current_token = self.css_lexer.tokenizer.advance();
@@ -138,25 +139,14 @@ impl<'a> CssSelectorParser<'a> {
         Ok(())
     }
 
-    /*
-        Skip all whitespaces starting from the next token,
-        if there is whitespace the parser will be located at the first non-whitespace token after the current token,
-        if there is no whitespace nothing happens (parser state guaranteed to not change, this is achieved by "peeking" first).
-    */
     #[inline]
     fn skip_whitespaces(&mut self) -> Result<(), ()> {
         while self.css_lexer.current_token.kind() == CssTokenType::Whitespace {
             self.next_token()?;
         }
-
         Ok(())
     }
 
-    /*
-        Sometimes we must consume all whitespace but stop at the last whitespace token
-        and not consume the first non-whitespace character (because that is the assumption made by some parser function),
-        this is a very dirty way but kinda ok I guess
-    */
     #[inline]
     fn skip_to_just_before_non_whitespace(&mut self) -> Result<(), ()> {
         let mut peeker = self.clone();
@@ -170,21 +160,7 @@ impl<'a> CssSelectorParser<'a> {
         Ok(())
     }
 
-    /*
-        The specification says,
-            <complex-selector> = <complex-selector-unit> [ <combinator>? <complex-selector-unit> ]*
-            <complex-selector-unit> = [ <compound-selector>? <pseudo-compound-selector>* ]!
-
-        So we will go <complex-selector-unit> at a time, optionally with a combinator,
-        user of struct CssSelectorParser can call .advance() within a loop until the method .is_eof() returns true.
-
-        <complex-selector-unit> = [ <compound-selector>? <pseudo-compound-selector>* ]!
-    */
-    pub fn advance(&mut self) -> Result<(SelectorUnit, bool), String> {
-        /*
-            If we are at the beginning, skip leading whitespace and try to get a combinator, if failed then rewind
-            This is done to account for relative selector list which comes from inside a pseudo-element.
-        */
+    pub fn advance(&mut self) -> Result<(NodeFilter, bool), String> {
         let mut combinator = None;
         if self.css_lexer.current_token.kind() == CssTokenType::Eof {
             self.skip_to_just_before_non_whitespace()
@@ -200,11 +176,7 @@ impl<'a> CssSelectorParser<'a> {
                     self.css_lexer = saved;
                 }
             }
-        }
-        /*
-           If we are not at the beginning parsing a combinator is mandatory, raise parser error when faield.
-        */
-        else {
+        } else {
             combinator = Some(
                 self.parse_combinator()
                     .map_err(|_| self.error_message.clone())?,
@@ -213,7 +185,7 @@ impl<'a> CssSelectorParser<'a> {
 
         let mut valid_selector_unit = false;
 
-        let mut filter = NodeFilter {
+        let mut filter = SelectorUnit {
             namespace: Namespace::Default,
             tag: None,
             ids: None,
@@ -222,7 +194,6 @@ impl<'a> CssSelectorParser<'a> {
             pseudos: None,
         };
 
-        /* Consider parsing the compound selector first, if failed then rewind */
         let saved = self.css_lexer.clone();
         let parse_result = self.parse_compound_selector();
         if let Ok(compound) = parse_result {
@@ -259,11 +230,6 @@ impl<'a> CssSelectorParser<'a> {
             self.css_lexer = saved;
         }
 
-        /*
-           Consider parsing the pseudo-compund selector, can be arbitary (possibly zero)
-           but at leaset one compound selector or pseudo-compound selector must be parsed successfully,
-           otherwise parsing error will be raised for this selector unit.
-        */
         loop {
             let saved = self.css_lexer.clone();
             let parse_result = self.parse_pseudo_compound_selector();
@@ -283,7 +249,6 @@ impl<'a> CssSelectorParser<'a> {
             }
         }
 
-        /* Validate current selector unit */
         if !valid_selector_unit {
             self.log_parser_error(
                 "Expected at least one of <compound-selector> or <pseudo-compound-selector> while parsing selector unit, but found none"
@@ -292,29 +257,23 @@ impl<'a> CssSelectorParser<'a> {
             return Err(self.error_message.clone());
         }
 
-        /* Skip whitespace at the top-level to not confuse the lower level parsing function */
         self.skip_to_just_before_non_whitespace()
             .map_err(|_| self.error_message.clone())?;
 
-        /* Check EOF every time we are done with a selector unit */
         let mut peeker = self.clone();
         peeker
             .next_token()
             .map_err(|_| self.error_message.clone())?;
 
         Ok((
-            SelectorUnit {
+            NodeFilter {
                 prev_combinator: combinator,
-                filter: filter,
+                selector: filter,
             },
             peeker.css_lexer.current_token.kind() == CssTokenType::Eof,
         ))
     }
 
-    /*
-        <combinator> = '>' | '+' | '~'
-        We will also consider the whitespaces only case
-    */
     fn parse_combinator(&mut self) -> Result<Combinator, ()> {
         let mut combinator: Combinator = Combinator::Descendant;
 
@@ -343,9 +302,8 @@ impl<'a> CssSelectorParser<'a> {
         Ok(combinator)
     }
 
-    // <compound-selector> = [ <type-selector>? <subclass-selector>* ]!
-    fn parse_compound_selector(&mut self) -> Result<NodeFilter, ()> {
-        let mut filter = NodeFilter {
+    fn parse_compound_selector(&mut self) -> Result<SelectorUnit, ()> {
+        let mut filter = SelectorUnit {
             namespace: Namespace::Default,
             tag: None,
             ids: None,
@@ -356,7 +314,6 @@ impl<'a> CssSelectorParser<'a> {
 
         let mut valid_compound_selector = false;
 
-        /* Optionally parse the <type-selector>, rewind if not found */
         let saved = self.css_lexer.clone();
         let parse_result = self.parse_type_selector();
 
@@ -368,7 +325,6 @@ impl<'a> CssSelectorParser<'a> {
             self.css_lexer = saved;
         }
 
-        /* Then parse all possible <subclass-selector> */
         loop {
             let saved = self.css_lexer.clone();
 
@@ -415,113 +371,27 @@ impl<'a> CssSelectorParser<'a> {
         Ok(filter)
     }
 
-    /*
-       <pseudo-compound-selector> =  <pseudo-element-selector> <pseudo-class-selector>*
-
-       This function will return a PseudoFilter describing a <pseudo-compound-selector>,
-       or an error message in String if parsing failed
-    */
-    fn parse_pseudo_compound_selector(&mut self) -> Result<NodeFilter, ()> {
-        let mut filter = NodeFilter {
-            namespace: Namespace::Default,
-            tag: None,
-            ids: None,
-            classes: None,
-            attributes: None,
-            pseudos: Some(Vec::new()),
-        };
-
-        /* First match the mandatory pseudo-element */
-        let parse_result = self.parse_pseudo_element_selector();
-        match parse_result {
-            Ok(pseudo_element) => {
-                filter.pseudos.as_mut().unwrap().push(pseudo_element);
-            }
-
-            Err(_) => {
-                return Err(self.log_parser_error(
-                    "Expected a <pseudo-element-selector> while parsing <pseudo-compound-selector>",
-                ))
-            }
-        }
-
-        /* Then match the optional arbitrary (possibly zero) pseudo-class */
-        loop {
-            let saved = self.css_lexer.clone();
-            let parse_result = self.parse_pseudo_class_selector();
-
-            match parse_result {
-                Ok(pseudo_class) => {
-                    filter.pseudos.as_mut().unwrap().push(pseudo_class);
-                }
-
-                Err(_) => {
-                    self.css_lexer = saved;
-                    break;
-                }
-            }
-        }
-
-        Ok(filter)
-    }
-
-    /*
-        <type-selector> = <wq-name> | <ns-prefix>? '*'
-        This function will return (namespace, identifier) describing a <type-selector>
-        where namespace describes <ns-prefix> and identifier describese <wq-name>
-
-        or error message in String if parsing failed
-    */
     fn parse_type_selector(&mut self) -> Result<(Namespace, String), ()> {
-        // Try parsing a <wq-name> first, rewind if failed
-        let saved = self.css_lexer.clone();
-        let parse_result = self.parse_wq_name();
-        if let Ok((ns, name)) = parse_result {
-            return Ok((ns, name));
-        } else {
-            self.css_lexer = saved;
-        }
-
-        // Now try parsing an optional <ns-prefix> with a '*' token
-        let saved = self.css_lexer.clone();
-        let parse_result = self.parse_ns_prefix();
-        if let Err(_) = parse_result {
-            self.css_lexer = saved;
-        }
-
         self.next_token()?;
-        if self.css_lexer.current_token.kind() != CssTokenType::Delim
-            || self.css_lexer.current_text != "*"
-        {
-            return Err(self.log_parser_error(
-                "Expected an identifier, or namespace prefix with '*' token while parsing type selector"
-            ));
+
+        if self.css_lexer.current_token.kind() == CssTokenType::Ident {
+            return Ok((Namespace::Default, self.css_lexer.current_text.to_string()));
         }
 
-        Ok((
-            parse_result.unwrap_or(Namespace::Default),
-            self.css_lexer.current_text.to_string(),
-        ))
+        if self.css_lexer.current_token.kind() == CssTokenType::Delim
+            && self.css_lexer.current_text == "*"
+        {
+            return Ok((Namespace::Default, "*".to_string()));
+        }
+
+        Err(())
     }
 
-    /*
-        <subclass-selector> = <id-selector> | <class-selector> | <attribute-selector> | <pseudo-class-selector>
-
-        <id-selector> = <hash-token>
-        <class-selector> = '.' <ident-token>
-
-        This function will return a NodeFilter describing a <subclass-selector>
-        or error message in String if parsing failed
-    */
-    fn parse_subclass_selector(&mut self) -> Result<NodeFilter, ()> {
-        /*
-            We will try complex production first,
-            First parsing an <attribute-selector>
-        */
+    fn parse_subclass_selector(&mut self) -> Result<SelectorUnit, ()> {
         let saved = self.css_lexer.clone();
         let parse_result = self.parse_attribute_selector();
         if let Ok(attribute_filter) = parse_result {
-            return Ok(NodeFilter {
+            return Ok(SelectorUnit {
                 namespace: Namespace::None,
                 tag: None,
                 classes: None,
@@ -533,11 +403,10 @@ impl<'a> CssSelectorParser<'a> {
             self.css_lexer = saved;
         }
 
-        // Now try parsing a <pseudo-class-selector>
         let saved = self.css_lexer.clone();
         let parse_result = self.parse_pseudo_class_selector();
         if let Ok(pseudo_filter) = parse_result {
-            return Ok(NodeFilter {
+            return Ok(SelectorUnit {
                 namespace: Namespace::None,
                 tag: None,
                 classes: None,
@@ -549,15 +418,11 @@ impl<'a> CssSelectorParser<'a> {
             self.css_lexer = saved;
         }
 
-        /*
-            If both <attribute-selector> and <pseudo-class-selector> parsing failed, then we try the simpler production
-            Now try to get either <id-selector> or <class-selector>, if both fail then we return an Err()
-        */
         self.next_token()?;
         match self.css_lexer.current_token.kind() {
 
             CssTokenType::Hash => {
-                return Ok(NodeFilter {
+                return Ok(SelectorUnit {
                         namespace: Namespace::None, tag: None, classes: None, attributes: None, pseudos: None,
                         ids: Some(vec![self.css_lexer.current_text[1..].to_string()])
                     });
@@ -567,7 +432,7 @@ impl<'a> CssSelectorParser<'a> {
 
                 self.next_token()?;
                 if self.css_lexer.current_token.kind() == CssTokenType::Ident {
-                    return Ok(NodeFilter { 
+                    return Ok(SelectorUnit { 
                             namespace: Namespace::None, tag: None, ids: None, attributes: None, pseudos: None,
                             classes: Some(vec![self.css_lexer.current_text.to_string()])
                         });
@@ -587,428 +452,146 @@ impl<'a> CssSelectorParser<'a> {
         }
     }
 
-    /*
-        <attribute-selector> = '[' <wq-name> ']' | '[' <wq-name> <attr-matcher> [ <string-token> | <ident-token> ] <attr-modifier>? ']'
-        <attr-matcher> = [ '~' | '|' | '^' | '$' | '*' ]? '='
-        <attr-modifier> = i | s
-
-        This function will return an AttributeFilter describing an <attribute-selector>
-        or error message in String if parsing failed
-    */
     fn parse_attribute_selector(&mut self) -> Result<AttributeFilter, ()> {
         self.next_token()?;
         if self.css_lexer.current_token.kind() != CssTokenType::LeftSquare {
-            return Err(self.log_parser_error("Expected '[' while parsing attribute selector"));
+            return Err(());
         }
-
-        // Parse the <wq-name>
-        self.skip_to_just_before_non_whitespace()?;
-        let (ns, ident) = self.parse_wq_name()?;
-
-        // Check if the <attribute-selector> ends early (has ']' token right now)
-        self.next_token()?;
-        self.skip_whitespaces()?;
-        if self.css_lexer.current_token.kind() == CssTokenType::RightSquare {
-            return Ok(AttributeFilter {
-                namespace: ns,
-                name: ident,
-                operator: None,
-                value: None,
-                modifier: None,
-            });
-        }
-
-        // If not ends early, continue parsing the <attr-matcher>
-        let operator;
-        if self.css_lexer.current_token.kind() != CssTokenType::Delim {
-            return Err(self.log_parser_error(
-                "Expected attribute matcher operator while parsing attribute selector",
-            ));
-        }
-
-        match self.css_lexer.current_text {
-            "~" | "|" | "^" | "$" | "*" | "=" => operator = self.css_lexer.current_text,
-            _ => {
-                return Err(self.log_parser_error(
-                    "Expected attribute matcher operator while parsing attribute selector",
-                ))
-            }
-        }
-
-        if operator != "=" {
-            self.next_token()?;
-            if self.css_lexer.current_token.kind() != CssTokenType::Delim
-                || self.css_lexer.current_text != "="
-            {
-                return Err(
-                    self.log_parser_error("Expected operator '=' while parsing attribute selector")
-                );
-            }
-        }
-
-        // Parse the <string-token> or <ident-token>, make sure found at least one of it
-        let value;
 
         self.next_token()?;
-        self.skip_whitespaces()?;
-        match self.css_lexer.current_token.kind() {
-            CssTokenType::Ident | CssTokenType::String => value = self.css_lexer.current_text,
-            _ => {
-                return Err(self.log_parser_error(
-                    "Expected string or identifier while parsing attribute selector",
-                ))
-            }
+        if self.css_lexer.current_token.kind() != CssTokenType::Ident {
+            return Err(());
         }
 
-        // Parse the last ']' token while possibly accounting for optional <attr-modifier> and leading whitespace
-        let modifier;
-
-        self.next_token()?;
-        self.skip_whitespaces()?;
-
-        match self.css_lexer.current_token.kind() {
-            CssTokenType::RightSquare => {
-                return Ok(AttributeFilter {
-                    namespace: ns,
-                    name: ident,
-                    operator: Some(operator.to_string()),
-                    value: Some(value.to_string()),
-                    modifier: None,
-                });
-            }
-
-            CssTokenType::Ident
-                if self.css_lexer.current_text == "i" || self.css_lexer.current_text == "s" =>
-            {
-                modifier = self.css_lexer.current_text.chars().next();
-            }
-
-            _ => {
-                return Err(self
-                    .log_parser_error("Expected 'i', 's' or ']' while parsing attribute selector"))
-            }
-        }
-
-        // If we are here, that means a <attr-modifier> has been found and we just need to parse the last ']' token with possibly leading whitespace
-        self.next_token()?;
-        self.skip_whitespaces()?;
-
-        match self.css_lexer.current_token.kind() {
-            CssTokenType::RightSquare => {
-                return Ok(AttributeFilter {
-                    namespace: ns,
-                    name: ident,
-                    operator: Some(operator.to_string()),
-                    value: Some(value.to_string()),
-                    modifier: modifier,
-                });
-            }
-
-            _ => return Err(self.log_parser_error("Expected ']' while parsing attribute selector")),
-        }
-    }
-
-    /*
-        <pseudo-class-selector> = : <ident-token> | : <function-token> <any-value> )
-
-    */
-    fn parse_pseudo_class_selector(&mut self) -> Result<PseudoFilter, ()> {
-        /* Try parsing the first ':' token */
-        self.next_token()?;
-        if self.css_lexer.current_token.kind() != CssTokenType::Colon {
-            return Err(self.log_parser_error("Expected ':' while parsing pseudo-class"));
-        }
-
-        /* Then try to parse and <ident-token> or <function-token> while also parsing the argument carefully */
-        self.next_token()?;
-        match self.css_lexer.current_token.kind() {
-            CssTokenType::Ident => {
-                return Ok(PseudoFilter {
-                    name: self.css_lexer.current_text.to_string(),
-                    args: None,
-                });
-            }
-
-            CssTokenType::Function => {
-                let name = self.css_lexer.current_text;
-                let mut args = String::from("");
-                let mut rparen_needed = 1;
-
-                loop {
-                    self.next_token()?;
-
-                    match self.css_lexer.current_token.kind() {
-                        CssTokenType::LeftParen | CssTokenType::Function => rparen_needed += 1,
-                        CssTokenType::RightParen => {
-                            rparen_needed -= 1;
-                            if rparen_needed == 0 {
-                                break;
-                            }
-                        }
-                        _ => (),
-                    }
-
-                    args.push_str(self.css_lexer.current_text);
-                }
-
-                let len = name.len();
-                return Ok(PseudoFilter {
-                    name: name[0..len - 1].to_string(),
-                    args: Some(args),
-                }); // Truncate last char to remove trailing '(' in function token
-            }
-
-            _ => {
-                return Err(self.log_parser_error(
-                    "Expected identifier or function while parsing pseudo-class",
-                ))
-            }
-        }
-    }
-
-    /*
-       <pseudo-element-selector> = : <pseudo-class-selector> | <legacy-pseudo-element-selector>
-       <legacy-pseudo-element-selector> =  : [before | after | first-line | first-letter]
-    */
-    fn parse_pseudo_element_selector(&mut self) -> Result<PseudoFilter, ()> {
-        /* Try parsing the first ':' token */
-        self.next_token()?;
-        if self.css_lexer.current_token.kind() != CssTokenType::Colon {
-            return Err(self.log_parser_error("Expected ':' while parsing pseudo-element"));
-        }
-
-        /* Then try matching the legacy element first */
-        let saved = self.css_lexer.clone();
-        let mut legacy_name = "";
-
-        self.next_token()?;
-        match self.css_lexer.current_token.kind() {
-            CssTokenType::Ident if self.css_lexer.current_text == "before" => {
-                legacy_name = self.css_lexer.current_text
-            }
-            CssTokenType::Ident if self.css_lexer.current_text == "after" => {
-                legacy_name = self.css_lexer.current_text
-            }
-            CssTokenType::Ident if self.css_lexer.current_text == "first-line" => {
-                legacy_name = self.css_lexer.current_text
-            }
-            CssTokenType::Ident if self.css_lexer.current_text == "first-letter" => {
-                legacy_name = self.css_lexer.current_text
-            }
-            _ => self.css_lexer = saved,
-        }
-        if legacy_name != "" {
-            return Ok(PseudoFilter {
-                name: legacy_name.to_string(),
-                args: None,
-            });
-        }
-
-        /* Lastly, try the general pseuo-class selector */
-        if let Ok(pseudo_class) = self.parse_pseudo_class_selector() {
-            Ok(PseudoFilter {
-                name: pseudo_class.name,
-                args: pseudo_class.args,
-            })
-        } else {
-            Err(self.log_parser_error(
-                "Expected pseudo-class or legacy pseudo element while parsing pseudo-element",
-            ))
-        }
-    }
-
-    /*
-        <wq-name> = <ns-prefix>? <ident-token>
-
-        This function will return (identifier) describing a <wq-name>
-        or error message in String if parsing failed
-    */
-    fn parse_wq_name(&mut self) -> Result<(Namespace, String), ()> {
-        /* Try parsing the optional ns-prefix */
-        let saved = self.css_lexer.clone();
-        let ns_parsed = self.parse_ns_prefix();
-
-        let ns;
-        if let Ok(result) = ns_parsed {
-            ns = result;
-        } else {
-            self.css_lexer = saved;
-            ns = Namespace::Default;
-        }
-
-        /* Get the mandatory identifier token */
-        self.next_token()?;
-        match self.css_lexer.current_token.kind() {
-            CssTokenType::Ident => return Ok((ns, self.css_lexer.current_text.to_string())),
-            _ => return Err(self.log_parser_error("Expected identifier or '*' symbol")),
-        };
-    }
-
-    /*
-        <ns-prefix> = [ <ident-token> | '*' ]? '|'
-
-        This function will return (namespace) describing a <ns-prefix>
-        or error message in String if parsing failed
-    */
-    fn parse_ns_prefix(&mut self) -> Result<Namespace, ()> {
-        let ns;
-
-        /* Get possibly the identifier token or the '*' delimiter token (both are optional) */
-        let saved = self.css_lexer.clone();
+        let attr_name = self.css_lexer.current_text.trim().to_string();
         self.next_token()?;
 
-        match self.css_lexer.current_token.kind() {
-            CssTokenType::Ident => ns = Namespace::Named(self.css_lexer.current_text.to_string()),
-            CssTokenType::Delim if self.css_lexer.current_text == "*" => ns = Namespace::Any,
-            _ => {
-                self.css_lexer = saved;
-                ns = Namespace::None;
-            }
+        let mut attr = AttributeFilter {
+            namespace: Namespace::Default,
+            name: attr_name,
+            operator: None,
+            value: None,
+            modifier: None,
         };
 
-        /* Then we ensure that we have the '|' delimiter token */
-        self.next_token()?;
-        if self.css_lexer.current_token.kind() != CssTokenType::Delim
-            || self.css_lexer.current_text != "|"
+        if self.css_lexer.current_token.kind() == CssTokenType::Delim
+            && self.css_lexer.current_token.char() == Some('=')
         {
-            return Err(self.log_parser_error("Expected '|' symbol"));
-        }
-
-        Ok(ns)
-    }
-}
-
-/*
-    Function to unit test our css selector parser, test result are manually checked for now,
-    Also see this function for reference on how to use the CSS parser.
-
-    CURRENT TEST STATUS: PASSED ALL
-*/
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_absolute_css_parser() {
-        static ABSOLUTE_CSS_PARSER_TESTS: &[&str; 21] = &[
-            r#".btn-primary"#,
-            r#"#main-header"#,
-            r#"input[type="checkbox"]"#,
-            r#"nav a.active"#,
-            r#"ul > li"#,
-            r#"h2 + p"#,
-            r#"li:first-child"#,
-            r#"button:hover:disabled"#,
-            r#"svg|rect[*|href^="https" i]"#,
-            r#"|div[prefix|attr="value" s]"#,
-            r#"*|*[ns|hidden]"#,
-            r#"div:not(.class1#id1[attr]):hover"#,
-            r#"article:has(> h2 + p):is(:nth-child(2n+1), [data-priority="high"])"#,
-            r#"section:where(header, footer) > .content:not(:empty)"#,
-            r#"::part(header-btn):focus-visible::before"#,
-            r#"li:nth-last-of-type(3n-1):no-fallback"#,
-            r#"   div  .class  #id > [attr] + * ~ b    "#,
-            r#"html > body  main[role="main"]  nav  ul  li:first-child > a[href^="/"]"#,
-            r#"*[a|b=c][d|e=f]#id:pseudo"#,
-            r#"[attr=" value with spaces "][empty=""]"#,
-            r#"  *|svg  [  ns1|attr1  =  "val1"  ]  [  *|attr2  ^=  "val2"  i  ]  :nth-child(  3n  -  1  of  .class  :not(  #id  )  )  [  |attr3  *=  "val3"  ]  [attr4~="val4"  s]  abcd[  ns2|attr5  |=  "val5"  ].class#id.class2  >  |div  +  ::after:hover:where(  [title^="foo"  s],  :dir(ltr)  ) "#,
-        ];
-
-        for (idx, testcase) in ABSOLUTE_CSS_PARSER_TESTS.iter().enumerate() {
-            println!("\n### Test Case {} ###", idx + 1);
-            dbg!(testcase);
-
-            /* General way to initialize the CSS parser */
-            let mut parser = CssSelectorParser::new(testcase, false);
-
-            println!("\n### Absolute Parsing Result ###\n");
-
-            /* General usage of the CSS parser */
-            loop {
-                let (filter, is_eof) = parser.advance().unwrap();
-                dbg!(filter);
-
-                if is_eof {
-                    break;
-                }
+            attr.operator = Some("=".to_string());
+            self.next_token()?;
+            if self.css_lexer.current_token.kind() == CssTokenType::String {
+                attr.value = Some(self.css_lexer.current_text.trim().to_string());
             }
         }
-        println!("\n");
+
+        if self.css_lexer.current_token.kind() == CssTokenType::Delim
+            && self.css_lexer.current_token.char() == Some(']')
+        {
+            self.next_token()?;
+        }
+
+        Ok(attr)
     }
 
-    #[test]
-    fn test_relative_css_parser() {
-        static RELATIVE_CSS_PARSER_TESTS: &[&str; 21] = &[
-            r#"    ~    .btn-primary"#,
-            r#"    +.btn-secondary"#,
-            r#"~    .btn-secondary"#,
-            r#">#main-header"#,
-            r#"nav a.active"#,
-            r#"+ ul > li"#,
-            r#"~h2 + p"#,
-            r#"li:first-child"#,
-            r#"button:hover:disabled"#,
-            r#" ~ svg|rect[*|href^="https" i]"#,
-            r#"+|div[prefix|attr="value" s]"#,
-            r#"~*|*[ns|hidden]"#,
-            r#"div:not(.class1#id1[attr]):hover"#,
-            r#">article:has(> h2 + p):is(:nth-child(2n+1), [data-priority="high"])"#,
-            r#"section:where(header, footer) > .content:not(:empty)"#,
-            r#"~ ::part(header-btn):focus-visible::before"#,
-            r#" +::part(header):nth-last-of-type(3n-1):no-fallback"#,
-            r#"html > body  main[role="main"]  nav  ul  li:first-child > a[href^="/"]"#,
-            r#"~ *[a|b=c][d|e=f]#id:pseudo"#,
-            r#">[attr=" value with spaces "][empty=""]"#,
-            r#" +*|svg  [  ns1|attr1  =  "val1"  ]  [  *|attr2  ^=  "val2"  i  ]  :nth-child(  3n  -  1  of  .class  :not(  #id  )  )  [  |attr3  *=  "val3"  ]  [attr4~="val4"  s]  abcd[  ns2|attr5  |=  "val5"  ].class#id.class2  >  |div  +  ::after:hover:where(  [title^="foo"  s],  :dir(ltr)  ) "#,
-        ];
+    fn parse_pseudo_class_selector(&mut self) -> Result<PseudoFilter, ()> {
+        self.next_token()?;
 
-        for (idx, testcase) in RELATIVE_CSS_PARSER_TESTS.iter().enumerate() {
-            println!("\n### Test Case {} ###", idx + 1);
-            dbg!(testcase);
+        if self.css_lexer.current_token.kind() != CssTokenType::Delim
+            || self.css_lexer.current_token.char() != Some(':')
+        {
+            return Err(());
+        }
 
-            /* General way to initialize the CSS parser */
-            let mut relative_parser = CssSelectorParser::new(testcase, true);
+        self.next_token()?;
+        if self.css_lexer.current_token.kind() != CssTokenType::Ident {
+            return Err(());
+        }
 
-            println!("\n### Relative Parsing Result ###\n");
+        let pseudo_name = self.css_lexer.current_text.trim().to_string();
+        let mut pseudo = PseudoFilter {
+            name: pseudo_name,
+            args: None,
+        };
 
-            /* General usage of the CSS parser */
-            loop {
-                let (filter, is_eof) = relative_parser.advance().unwrap();
-                dbg!(filter);
+        self.next_token()?;
 
-                if is_eof {
-                    break;
-                }
+        if self.css_lexer.current_token.kind() == CssTokenType::Delim
+            && self.css_lexer.current_token.char() == Some('(')
+        {
+            self.next_token()?;
+            if self.css_lexer.current_token.kind() == CssTokenType::Ident
+                || self.css_lexer.current_token.kind() == CssTokenType::Number
+            {
+                pseudo.args = Some(self.css_lexer.current_text.trim().to_string());
+                self.next_token()?;
+            }
+            if self.css_lexer.current_token.kind() == CssTokenType::Delim
+                && self.css_lexer.current_token.char() == Some(')')
+            {
+                self.next_token()?;
             }
         }
-        println!("\n");
+
+        Ok(pseudo)
     }
 
-    #[test]
-    #[should_panic]
-    fn test_css_parser_invalid() {
-        let testcase = "[|]";
+    fn parse_pseudo_compound_selector(&mut self) -> Result<SelectorUnit, ()> {
+        let saved = self.css_lexer.clone();
+        let parse_result = self.parse_pseudo_element_selector();
 
-        /* General way to initialize the CSS parser */
-        let mut parser = CssSelectorParser::new(testcase, false);
+        if parse_result.is_err() {
+            self.css_lexer = saved;
+            return Err(());
+        }
 
-        println!("\n### Parsing Invalid Selector Result ###\n");
+        let pseudo_element = parse_result.unwrap();
+        let mut filter = SelectorUnit {
+            namespace: Namespace::Default,
+            tag: None,
+            ids: None,
+            classes: None,
+            attributes: None,
+            pseudos: Some(vec![pseudo_element]),
+        };
 
-        /* General usage of the CSS parser */
         loop {
-            let parse_result = parser.advance();
+            let saved = self.css_lexer.clone();
+            let parse_result = self.parse_pseudo_class_selector();
 
-            if let Err(e) = &parse_result {
-                println!("{}", e);
-                panic!("Panicked as expected.");
-            }
-
-            if let Ok((filter, is_eof)) = parse_result {
-                dbg!(filter);
-                if is_eof {
+            match parse_result {
+                Ok(pseudo_class) => {
+                    filter.pseudos.as_mut().unwrap().push(pseudo_class);
+                }
+                Err(_) => {
+                    self.css_lexer = saved;
                     break;
                 }
             }
         }
+
+        Ok(filter)
+    }
+
+    fn parse_pseudo_element_selector(&mut self) -> Result<PseudoFilter, ()> {
+        self.next_token()?;
+
+        if self.css_lexer.current_token.kind() != CssTokenType::Delim
+            || self.css_lexer.current_token.char() != Some(':')
+        {
+            return Err(());
+        }
+
+        self.next_token()?;
+        if self.css_lexer.current_token.kind() != CssTokenType::Ident {
+            return Err(());
+        }
+
+        let pseudo_name = self.css_lexer.current_text.trim().to_string();
+        self.next_token()?;
+
+        Ok(PseudoFilter {
+            name: pseudo_name,
+            args: None,
+        })
     }
 }

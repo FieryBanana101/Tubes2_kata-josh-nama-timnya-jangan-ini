@@ -5,9 +5,13 @@ use std::sync::Arc;
 
 mod tokenizer;
 mod css_selector;
+mod traversal;
+mod async_util;
+mod matching;
+mod lca;
 
 use tokenizer::{parser as tokenizer_parse, Element, Node as TokenizerNode};
-use css_selector::{CssSelectorParser, NodeFilter, Combinator};
+use css_selector::{CssSelectorParser, NodeFilter, Combinator, SelectorUnit};
 
 #[derive(Serialize, Deserialize)]
 pub struct QueryPostBody {
@@ -82,7 +86,7 @@ fn build_flat_nodes(element: &Arc<Element>) -> Vec<QueryResponseNode> {
     }).collect()
 }
 
-fn matches_filter(node: &QueryResponseNode, filter: &NodeFilter) -> bool {
+fn matches_filter(node: &QueryResponseNode, filter: &SelectorUnit) -> bool {
     if let Some(ref tag) = filter.tag {
         if node.tag != *tag { return false; }
     }
@@ -100,13 +104,13 @@ fn matches_filter(node: &QueryResponseNode, filter: &NodeFilter) -> bool {
     true
 }
 
-fn process_selector(nodes: &[QueryResponseNode], filter: &NodeFilter, root_idx: i32) -> (Vec<Vec<i32>>, Vec<i32>, Vec<i32>) {
+fn process_selector(nodes: &[QueryResponseNode], filter: &SelectorUnit, root_idx: i32) -> (Vec<Vec<i32>>, Vec<i32>, Vec<i32>) {
     let mut out_paths: Vec<Vec<i32>> = Vec::new();
     let mut out_selected = Vec::new();
     let mut out_traversal = Vec::new();
     let mut curr_path: Vec<i32> = Vec::new();
     
-    fn inner_dfs(nd: &[QueryResponseNode], ci: i32, ft: &NodeFilter, cp: &mut Vec<i32>, ops: &mut Vec<Vec<i32>>, os: &mut Vec<i32>, ot: &mut Vec<i32>) {
+    fn inner_dfs(nd: &[QueryResponseNode], ci: i32, ft: &SelectorUnit, cp: &mut Vec<i32>, ops: &mut Vec<Vec<i32>>, os: &mut Vec<i32>, ot: &mut Vec<i32>) {
         ot.push(ci);
         cp.push(ci);
         
@@ -127,7 +131,7 @@ fn process_selector(nodes: &[QueryResponseNode], filter: &NodeFilter, root_idx: 
     (out_paths, out_selected, out_traversal)
 }
 
-fn process_selector_with_combinator(nodes: &[QueryResponseNode], filter: &NodeFilter, root_idx: i32, combinator: &Option<Combinator>) -> (Vec<Vec<i32>>, Vec<i32>, Vec<i32>) {
+fn process_selector_with_combinator(nodes: &[QueryResponseNode], filter: &SelectorUnit, root_idx: i32, combinator: &Option<Combinator>) -> (Vec<Vec<i32>>, Vec<i32>, Vec<i32>) {
     match combinator {
         Some(Combinator::Child) | Some(Combinator::DirectNextSibling) => {
             let mut paths = Vec::new();
@@ -183,9 +187,9 @@ async fn process_query(body: web::Json<QueryPostBody>) -> QueryResponse {
         match parser.advance() {
             Ok((unit, is_eof)) => {
                 let mut parts = Vec::new();
-                if let Some(ref tag) = unit.filter.tag { parts.push(tag.clone()); }
-                if let Some(ref classes) = unit.filter.classes { for c in classes { parts.push(format!(".{}", c)); } }
-                if let Some(ref ids) = unit.filter.ids { for id in ids { parts.push(format!("#{}", id)); } }
+                if let Some(ref tag) = unit.selector.tag { parts.push(tag.clone()); }
+                if let Some(ref classes) = unit.selector.classes { for c in classes { parts.push(format!(".{}", c)); } }
+                if let Some(ref ids) = unit.selector.ids { for id in ids { parts.push(format!("#{}", id)); } }
                 query_parts.push(parts.join(""));
                 selector_units.push(unit);
                 if is_eof { break; }
@@ -200,7 +204,7 @@ async fn process_query(body: web::Json<QueryPostBody>) -> QueryResponse {
     
     for (i, unit) in selector_units.iter().enumerate() {
         let query_text = query_parts.get(i).cloned().unwrap_or_default();
-        let (paths, selected, traversal_path) = process_selector_with_combinator(&flat_nodes, &unit.filter, current_root, &unit.prev_combinator);
+        let (paths, selected, traversal_path) = process_selector_with_combinator(&flat_nodes, &unit.selector, current_root, &unit.prev_combinator);
         
         results.push(ResultItem {
             query: query_text,
