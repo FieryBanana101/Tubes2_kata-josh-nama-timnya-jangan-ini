@@ -1,17 +1,18 @@
 use std::{collections::HashMap, fs, io, fmt, sync::Arc};
 use html5gum::{Tokenizer, Token, HtmlString};
 use reqwest;
-#[derive(Debug, Clone)]
-enum Node {
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Node {
     Element(Arc<Element>),
     Text(Arc<String>)
 }
 
-#[derive(Debug, Clone)]
-struct Element {
-    tag: String,
-    attributes: HashMap<String, String>,
-    children: Vec<Node>
+#[derive(Debug, Clone, PartialEq)]
+pub struct Element {
+    pub tag: String,
+    pub attributes: HashMap<String, String>,
+    pub children: Vec<Node>
 }
 
 // DEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUG
@@ -52,6 +53,16 @@ struct Element {
 //     let body = res.text().await?;
 //     Ok(body)
 // }
+
+fn bounded(current: &str, incoming: &str) -> bool{
+    match incoming {
+        "li" => matches!(current, "ul" | "ol" | "menu" | "div" | "section" | "article" | "nav" | "aside"),
+        "dt" | "dd" => current == "dl",
+        "option" => current == "optgroup" || current == "select",
+        "td" | "th" => current == "tr",
+        _ => false
+    }
+}
 
 fn closes_tag(current: &str, incoming: &str) -> bool{
     match current {
@@ -131,22 +142,23 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
                     };
                     stack.push(node);
                 }
-                if let Some(pos) = stack.iter().position(|x| closes_tag(&x.tag, &tag_string)){
-                    while stack.len() > pos + 1 {
+                if let Some(pos) = stack.iter().rposition(|x| closes_tag(&x.tag, &tag_string)){
+                    if !stack[pos + 1..].iter().any(|x| bounded(&x.tag, &tag_string)){
+                        while stack.len() > pos + 1 {
+                            let node = stack.pop().unwrap();
+                            if let Some(parent) = stack.last_mut() {
+                                parent.children.push(Node::Element(Arc::new(node)));
+                            }
+                        }
                         let node = stack.pop().unwrap();
                         if let Some(parent) = stack.last_mut() {
                             parent.children.push(Node::Element(Arc::new(node)));
                         }
+                        else {
+                            // the only element in the tree
+                            root = node;
+                        }   
                     }
-
-                    let node = stack.pop().unwrap();
-                    if let Some(parent) = stack.last_mut() {
-                        parent.children.push(Node::Element(Arc::new(node)));
-                    }
-                    else {
-                        // the only element in the tree
-                        root = node;
-                    }   
                 }
 
                 if tag.self_closing || VOID_TAGS.contains(&tag_string.as_str()) {
@@ -158,7 +170,9 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
                         children: Vec::new() 
                     };
                     for (key, value) in tag.attributes.iter() {
-                        new_node.attributes.insert(htmlstring_to_string(key), htmlstring_to_string(value));
+                        if !new_node.attributes.contains_key(key) {
+                            new_node.attributes.insert(htmlstring_to_string(key), htmlstring_to_string(value));
+                        }
                     }
                     
                     if let Some(parent) = stack.last_mut(){
@@ -175,7 +189,9 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
                         children: Vec::new() 
                     };
                     for (key, value) in tag.attributes.iter() {
-                        new_node.attributes.insert(htmlstring_to_string(key), htmlstring_to_string(value));
+                        if !new_node.attributes.contains_key(key) {
+                            new_node.attributes.insert(htmlstring_to_string(key), htmlstring_to_string(value));
+                        }
                     }
                     stack.push(new_node);
 
@@ -186,22 +202,23 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
                 let tag_string = htmlstring_to_string(&tag.name);
                 println!("EndToken({})", &tag_string);
 
-                if let Some(pos) = stack.iter().position(|x| &x.tag == &tag_string){
-                    while stack.len() > pos + 1 {
+                if let Some(pos) = stack.iter().rposition(|x| &x.tag == &tag_string){
+                    if !stack[pos + 1..].iter().any(|x| bounded(&x.tag, &tag_string)){
+                        while stack.len() > pos + 1 {
+                            let node = stack.pop().unwrap();
+                            if let Some(parent) = stack.last_mut() {
+                                parent.children.push(Node::Element(Arc::new(node)));
+                            }
+                        }
                         let node = stack.pop().unwrap();
                         if let Some(parent) = stack.last_mut() {
                             parent.children.push(Node::Element(Arc::new(node)));
                         }
+                        else {
+                            // the only element in the tree
+                            root = node;
+                        }   
                     }
-
-                    let node = stack.pop().unwrap();
-                    if let Some(parent) = stack.last_mut() {
-                        parent.children.push(Node::Element(Arc::new(node)));
-                    }
-                    else {
-                        // the only element in the tree
-                        root = node;
-                    }   
                 } else {
                     continue;
                 }

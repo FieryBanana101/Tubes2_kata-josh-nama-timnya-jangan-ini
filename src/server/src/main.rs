@@ -1,9 +1,13 @@
 use actix_web::{web, App, HttpServer, HttpResponse, http};
 use actix_cors::Cors;
 use serde::{Deserialize, Serialize};
-mod tokenizer;
 
 mod css_selector;
+mod traversal;
+mod async_util;
+mod tokenizer;
+mod matching;
+mod lca;
 
 #[derive(Serialize,Deserialize)]
 struct QueryPostBody {
