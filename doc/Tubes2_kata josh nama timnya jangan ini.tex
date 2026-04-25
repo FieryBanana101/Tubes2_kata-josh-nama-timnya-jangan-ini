@@ -19,6 +19,7 @@
 \usepackage{fancyhdr}
 \usepackage[utf8]{inputenc}
 
+\usepackage{float}
 \usepackage{forest}
 \usepackage{xcolor}
 \usepackage{amsmath}
@@ -28,9 +29,11 @@
 \usepackage{color}
 \usepackage{hyperref}
 \usepackage{minted}
+\usepackage{algorithm}
 \usepackage{algpseudocode}
 
 \geometry{left=3cm,right=3cm,top=3cm,bottom=3cm}
+\graphicspath{ {images/} }
 
 % --- Header and Footer --- %
 \fancypagestyle{plain}{
@@ -60,6 +63,17 @@
 \cftsetpnumwidth{2.5em}
 \cftsetrmarg{4em}
 
+% Figure prefix
+\renewcommand{\figurename}{Gambar}
+
+% Remove indentation
+\setlength{\parindent}{0pt}
+
+% Algorithm float position
+\newfloat{algorithm}{t}{lop}
+
+
+
 \begin{document}
 
 \begin{center}
@@ -68,7 +82,7 @@
     {\large \textsc{Pemanfaatan Algoritma BFS dan DFS dalam Mekanisme Penelusuran CSS pada pohon \textit{Document Object Model}}} \\[0.5em]
     {\normalsize Semester II Tahun 2025/2026} \\[3em]
 
-    \includegraphics[width=0.45\textwidth]{image/foto-kelompok.png} \\ [1cm]
+    \includegraphics[width=0.45\textwidth]{foto-kelompok.png} \\ [1cm]
     \begin{center}
         \large
         \begin{tabular*}{0.55\textwidth}{@{\hspace{0pt}} l @{\hspace{1cm}} r @{\hspace{0pt}}}
@@ -93,32 +107,1314 @@
 
 \section{Deskripsi Tugas}
 
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=10cm]{section1-dom.png}
+    \caption{Struktur Pohon DOM (\textit{Document Object Model})}
+    \label{fig:section1-dom}
+\end{figure}
+
+Document Object Model (DOM) merupakan representasi terstruktur dari dokumen HTML dalam bentuk tree yang 
+memungkinkan setiap elemen pada halaman web diakses, dimodifikasi, dan dimanipulasi oleh program. 
+Struktur ini merepresentasikan hubungan antar elemen HTML seperti 
+parent, child, dan sibling sehingga memudahkan pengolahan dokumen secara terprogram. \\
+
+Struktur sebuah file HTML pada umumnya meliputi elemen root <html> yang berisi dua bagian utama yaitu <head> dan <body>. 
+Bagian <head> berisi metadata seperti judul halaman, link stylesheet, dan script, sedangkan <body> berisi konten utama halaman 
+seperti teks, gambar, tombol, dan elemen HTML lainnya yang ditampilkan kepada pengguna. \\
+
+Sebuah website menampilkan sebuah DOM melalui sebuah file bernama Cascading Style Sheets (CSS) yang bertujuan mendeklarasikan visualisasi elemen-elemen pada pohon. 
+Deklarasi visualisasi ditempelkan pada elemen-elemen yang berkaitan melalui CSS Selector. \\
+
+Pada Tugas Besar 2 Strategi Algoritma ini, mahasiswa diminta untuk menelusuri dan mencari elemen pada struktur DOM berdasarkan CSS Selector tertentu dengan menggunakan algoritma penelusuran graf yaitu Breadth First Search (BFS) dan Depth First Search (DFS). 
+Algoritma tersebut digunakan untuk menjelajahi struktur pohon DOM guna menemukan elemen yang sesuai dengan selector yang diberikan. \\
+
+Komponen-komponen penting yang terdapat pada tugas besar ini antara lain:
+\begin{enumerate}
+    \item HTML Tags
+    \item CSS Selector
+    \item HTML parsing
+\end{enumerate} \\
+
+Pada tugas ini, terdapat spesifikasi wajib untuk membuat aplikasi traversal pohon HTML (DOM Tree) yang menggunakan algoritma Breadth First Search (BFS) dan Depth First Search (DFS) untuk melakukan pencarian elemen berdasarkan CSS selector pada struktur DOM dengan detail sebagai berikut,
+\begin{itemize}
+    \item Buatlah sebuah aplikasi berbasis web yang terdiri dari frontend bebas dan backend dalam bahasa \textbf{Go}, \textbf{C\#}, \textbf{Rust}, atau \textbf{Typescript} yang mengimplementasikan algoritma \textbf{BFS} dan \textbf{DFS} untuk melakukan penelusuran CSS pada pohon DOM.
+    \item Aplikasi dapat melakukan scraping HTML dari sebuah website melalui URL yang diberikan oleh pengguna
+    \item Secara umum, berikut adalah input yang diharapkan,
+    \begin{enumerate}
+        \item URL website atau memasuki teks HTML sendiri
+        \item Pilihan algoritma traversal (BFS / DFS)
+        \item CSS selector
+        \item Jumlah hasil yang ingin ditampilkan:
+        \item Top n kemunculan
+        \item Semua kemunculan
+    \end{enumerate}
+    \item HTML yang diperoleh kemudian diparsing menjadi struktur data pohon (DOM Tree).
+    \item Output yang diharapkan adalah sebagai berikut:
+    \begin{enumerate}
+        \item Aplikasi dapat menampilkan visualisasi struktur pohon DOM, disertai dengan keterangan kedalaman maksimum tree
+        \item Aplikasi dapat menampilkan highlight pada jalur yang di-traversal oleh algoritma penelusuran yang dipilih untuk menandakan elemen-elemen yang terpengaruh.
+        \item Aplikasi dapat menampilkan waktu pencarian serta banyak node yang dikunjungi. 
+        \item Setelah melakukan penelusuran, aplikasi menyimpan sebuah traversal log yang memiliki informasi tahapan penelusuran yang dilakukan. 
+    \end{enumerate}
+\end{itemize} \\
+
+Selain itu terdapat spesifikasi bonus tugas besar (opsional) dengan poin tambahan tertentu yang dapat dipilih dengan detail sebagai berikut,
+\begin{itemize}
+    \item (4 poin) [Video] Membuat video tentang aplikasi BFS dan DFS pada penelusuran pohon DOM kemudian mengunggahnya di Youtube. Video dibuat harus memiliki audio dan menampilkan wajah dari setiap anggota kelompok.
+    \item (5 poin) [Deploy] Aplikasi web yang telah dibuat perlu di deploy menggunakan Microsoft Azure Virtual Machine (VM).
+    \item (2 Poin) [Docker] Aplikasi dijalankan menggunakan Docker baik untuk frontend maupun backend.
+    \item (6 Poin) [Animasi] Menampilkan animasi penelusuran pohon DOM untuk segala pencarian.
+    \item (3 Poin) [Multithreading] Mengimplementasikan multithreading pada algoritma BFS dan/atau DFS untuk melakukan traversal pohon DOM secara paralel. Proses traversal dibagi ke beberapa thread/worker sehingga beberapa node dapat diproses secara bersamaan.
+    \item (3 Poin) [LCA Binary Lifting] Mengimplementasikan algoritma Lowest Common Ancestor (LCA) dengan teknik Binary Lifting pada pohon DOM yang dihasilkan.
+\end{itemize}
 
 \pagebreak
 
 \section{Landasan Teori}
 
+\subsection{Graph Traversal}
+Graph Traversal atau traversal graf adalah operasi yang dapat dilakukan pada sebuah graf dengan mengunjungi simpul-simpul yang ada secara sistematik.
+Terdapat berbagai jenis traversal graf, misalnya pencarian melebar (\textit{breadth first search}/BFS) dan pencarian mendalam (\textit{depth first search}/DFS).
+Untuk melakukan traversal graf, terdapat asumsi bahwa semua simpul yang ingin dikunjungi harus saling terhubung (berada pada satu \textit{connected component} yang sama) \cite{stima-graph-1}.\\
+
+Setiap kali mengunjungi simpul, algoritma dapat melakukan suboperasi seperti mencetak informasi di dalam simpul, memanipulasi nilainya, dan lain-lain.
+Karena graf merupakan representasi suatu persoalan, maka melakukan traversal di dalam graf dapat diartikan sebagai melakukan pencarian solusi persoalan yang direpresentrasikan dengan graf tersebut \cite{stima-graph-1}. \\
+
+
+Algoritma pencarian pada graf berbasis solusi dapat diklasifikasin sebagai \cite{stima-graph-1}:
+\begin{enumerate}
+    \item \textbf{Tanpa informasi} (\textit{uninformed}/\textit{blind search})
+    \begin{itemize}
+        \item Tidak ada informasi tambahan yang disediakan tentang seberapa dekat suatu simpul dengan tujuan
+        \item Satu-satunya informasi hanya dari graf itu sendiri
+        \item Contoh algoritma: DFS, BFS, Depth Limited Search, Iterative Deepening Search, Uniform Cost Search
+    \end{itemize}
+    \item \textbf{Dengan informasi} (\textit{informed search})
+    \begin{itemize}
+        \item Pencarian berbasis heuristik
+        \item Menggunakan informasi tambahan berupa heuristic function untuk memperkirakan seberapa dekat suatu simpul ke tujuan, atau dengan kata lain simpula mana yang “lebih menjanjikan” ke simpul tujuan.
+        \item Contoh algoritma: Greedy Best First Search, A*
+    \end{itemize}
+\end{enumerate} \\
+
+
+Representasi graf dalam pencarian solusi dapat dibagi menjadi dua pendekatan \cite{stima-graph-2}:
+\begin{enumerate}
+    \item \textbf{Graf statis}: graf yang sudah tersedia sebelum proses pencarian dilakukan dan langsung direpresentasikan sebagai struktur data
+    \item \textbf{Graf dinamis}: graf tidak tersedia sebelum pencarian dan dibangun secara bertahap selama pencarian solusi 
+\end{enumerate} \\
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=9cm, height=6cm]{section2-static-graph.png}
+    \caption{Contoh graf statis}
+    \label{fig:section2-static-graph}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=13cm, height=6cm]{section2-dynamic-graph.png}
+    \caption{Contoh graf dinamis}
+    \label{fig:section2-dynamic-graph}
+\end{figure}
+
+
+Terkait pencarian solusi dengan traversal pada graph dinamis perlu memperhatikan hal-hal berikut \cite{stima-graph-2}:
+\begin{itemize}
+    \item Persoalan diselesaikan dengan melakukan pencarian solusi sambil membangun graf (umumnya bentuk khusus pohon) secara bertahap
+    \item Pencarian solusi ekuivalen dengan pembentukan pohon dinamis
+    \item Simpul dibuat lalu diperiksa apakah merupakan simpul solusi. Jika simpul merupakan solusi maka pencarian selesai (jika hanya satu solusi ditemukan) atau dilanjutkan mencari solusi lain (semua solusi ditemukan)
+    \item Representasi pohon dinamis:
+    \begin{enumerate}
+        \item Dinamakan psebagai \textbf{pohon ruang status} (\textit{state space tree})
+        \item \textbf{Simpul} menyatakan status persoalan (\textit{problem state})
+        \item \textbf{Akar}: \textit{initial state}
+        \item \textbf{Daun}: \textit{solution}/\textit{goal state}
+        \item \textbf{Cabang}: \textit{operator}/langkah dalam persoalan
+        \item \textbf{Ruang status} (\textit{state space}): himpunan semua simpul
+        \item \textbf{Ruang solusi}: himpunan status solusi
+    \end{enumerate}
+    \item \textbf{Solusi}: lintasan dari akar ke simpul solusi
+\end{itemize} \\
+
+
+Teknik pencarian menggunakan algoritma traversal graf dapat dievaluasi dengan properti-properti berikut \cite{stima-graph-2}:
+\begin{enumerate}    
+    \item \textbf{Completeness}: terkait apakah teknik pencarian menjamin ditemukannya solusi (jika ada)
+    \item \textbf{Optimality}: terkait apakah teknik pencarian menjamin mendapatkan solusi yang optimal
+    \item \textbf{Time Complexity}: waktu yang diperlukan untuk mencapai simpul solusi
+    \item \textbf{Space Complexity}: ruang memori yang diperlukan selama melakukan pencarian
+    \item Kompleksitas waktu dan ruang diukur dengan menggunakan istilah berikut,
+    \begin{itemize}
+        \item $b$ (\textit{branching factor}): maksimum pencabangan yang mungkin dari suatu simpul
+        \item $d$ (\textit{depth}): kedalaman dari solusi terbaik (dengan cost terendah, sesuai definisi cost pada masalah)
+        \item $m$: maksimum kedalaman dari ruang status (mungkin memiliki nilai $\infty$)
+    \end{itemize}
+\end{enumerate} \\
+
+\subsubsection{Depth First Search}
+
+Depth First Search yaitu traversal graf secara mendalam yang dapat digambarkan dengan algoritma rekursif berikut ini (traversal dimulai dari simpul v) \cite{stima-graph-1},
+\begin{enumerate}
+    \item Kunjungi simpul $v$ (simpul saat ini)
+    \item Kunjungi simpul $w$ yang bertetangga dengan simpul $v$.
+    \item Ulangi DFS mulai dari simpul $w$ tersebut
+    \item Ketika mencapai simpul $u$ sedemikian sehingga semua simpul yang bertetangga dengannya telah dikunjungi,
+    pencarian dirunut-balik (\textit{backtrack}) ke simpul terakhir yang dikunjungi sebelumnya dan mempunyai simpul
+    yang belum dikunjungi.
+    \item Pencarian berakhir bila tidak ada lagi simpul yang belum dikunjungi yang dapat dicapai dari simpul yang
+    telah dikunjungi.
+\end{enumerate}
+
+
+Struktur data yang dibutuhkan untuk DFS secara rekursif yaitu hanya,
+\begin{enumerate}
+    \item Tabel boolean yang melacak simpul yang telah dikunjungi, dengan deskripsi:
+    \begin{itemize}
+        \item $visited : array[l..n]$ of boolean
+        \item $visited[i] = true$ jika simpul $i$ sudah dikunjungi
+        \item $visited[i] = false$ jika simpul $i$ belum dikunjungi
+    \end{itemize}
+\end{enumerate} \\
+
+
+DFS dapat digambarkan dengan \textit{pseudo-code} berikut \cite{stima-graph-1},
+\begin{algorithm}[H]
+    \caption{Mengunjungi seluruh simpul graf dengan DFS} \label{alg:dfs}
+    \begin{algorithmic}
+        \Require Tabel boolean $visited$ telah diinisalisasi dan dapat diakses
+        \Statex
+
+        \Procedure{DFS}{$v$}
+            \State \textbf{Input:} \; $v$: simpul yang dikunjungi saat ini
+            \Statex
+
+            \State \Call{Process}{$v$} \Comment{Proses simpul sesuai kebutuhan}
+            \For{$u \in $ \Call{neighbour}{$v$}}
+                \If{\textbf{not} $visited[u]$}
+                    \State \Call{DFS}{$u$}
+                \EndIf
+            \EndFor
+
+        \EndProcedure
+    \end{algorithmic}
+\end{algorithm} \\
+
+Simpul-simpul yang dikunjungi pada traversal graf secara DFS dapat digambarkan sebagai pohon, dinamakan pohon DFS \cite{stima-graph-1}. \\
+
+Depth First search dapat menemukan jalur dengan jarak terpendek khusus untuk graf berbentuk pohon (karena hanya ada satu kemungkinan jalur antar simpul) \cite{cp-dfs}. \\
+
+Depth First Search memiliki properti berikut \cite{stima-graph-1} \cite{cp-dfs},
+\begin{itemize}
+    \item Completeness? Ya (selama nilai \textit{branching factor} terbatas)
+    \item Optimality? Tidak
+    \item Kompleksitas waktu: $O(b^m)$ atau $O(m + n)$ dengan $b$ \textit{branching factor}, $m$ jumlah simpul, dan $n$ jumlah sisi
+    \item Kompleksitas ruang: $O(bm)$ atau $O(m)$ dengan $b$ \textit{branching factor}, $m$ jumlah simpul
+    \item Memiliki heuristik untuk kurang baik dalam kompleksitas waktu tetapi lebih baik dalam kompleksitas ruang
+    \item Efisien tetapi tidak menjamin solusi dengan langkah minimum pada graf umum
+\end{itemize} \\
+
+DFS dapat memilih langkah yang salah, sehingga path panjang bahkan \textit{infinite}. Pemilihan langkah sangat penting sehingga dapat dikembangkan teknik pencarian khusus
+seperti Depth Limited Search (DLS) dan Iterative Deepening Search (IDS) \cite{stima-graph-2}. \\
+
+Depth Limited Search yaitu melakukan DFS dengan syarat tambahan, \textit{backtrack} harus dilakukan jika telah mencapai suatu jarak $n$ dari simpul awal. 
+Sedangkan Iterative Deepening Search yaitu melakukan DLS
+dengan jarak $n$ yang diatur menaik secara iteratif sampai solusi ditemukan \cite{stima-graph-2}. \\
+
+DLS dapat digambarkan dengan \textit{pseudo-code} berikut ini \cite{stima-graph-2},
+\begin{algorithm}[H]
+    \caption{Mengunjungi seluruh simpul graf dengan DLS} \label{alg:dls}
+    \begin{algorithmic}
+        \Require Tabel boolean $visited$ telah diinisalisasi dan dapat diakses
+        \Statex
+
+        \Function{DLS}{$v$, $limit$}
+            \State \textbf{Input:} \; $v$: simpul yang dikunjungi saat ini
+            \State \qquad \qquad $limit$: batas kedalaman maksimal dari simpul awal
+            \State \textbf{Output:} solusi dari permasalahan jika ditemukan
+            \Statex
+
+            \State $result \gets $ \Call{Process}{$v$} \Comment{Proses simpul sesuai kebutuhan}
+            \If{$result = $ \textbf{success}}
+                \State \Return $result$
+            \EndIf
+
+            \Statex
+
+            \For{$u \in $ \Call{neighbour}{$v$}}
+                \If{\textbf{not} $visited[u]$ \textbf{and} \Call{depth}{u} $ \leq limit$}
+                    \State $result \gets $ \Call{DLS}{$u$}
+                    \If{$result = $ \textbf{success}}
+                        \State \Return $result$
+                    \EndIf
+                \EndIf
+            \EndFor
+
+        \EndFunction
+    \end{algorithmic}
+\end{algorithm} \\
+
+DLS memiliki properti sebagai berikut \cite{stima-graph-2}, 
+\begin{itemize}
+    \item Completeness? Tidak
+    \item Optimality? Tidak
+    \item Kompleksitas waktu: $O(b^n)$, dengan $b$ \textit{branching factor} dan $n$ batas jarak
+    \item Kompleksitas ruang: $O(bn)$, dengan $b$ \textit{branching factor} dan $n$ batas jarak.
+\end{itemize} \\
+
+IDS dijalankan melalui fungsi $DLS$ dari algoritma \ref{alg:dls}. IDS dapat digambarkan melalui \textit{pseudo-code} berikut ini \cite{stima-graph-2},
+\begin{algorithm}[H]
+    \caption{Mengunjungi seluruh simpul graf dengan IDS} \label{alg:ids}
+    \begin{algorithmic}
+        \Require Tabel boolean $visited$ telah diinisalisasi dan dapat diakses
+        \Statex
+
+        \Function{IDS}{$v$, $limit$}
+            \State \textbf{Input:} \; $v$: simpul awal yang akan dikunjungi
+            \State \qquad \qquad $limit$: batas kedalaman maksimal dari simpul awal
+            \State \textbf{Output:} solusi dari permasalahan jika ditemukan
+            \Statex
+
+            \State $i \gets 0$
+            \State $result \gets $ \Call{DLS}{$v$, $i$}
+            \While{$i+1 \leq limit$ \textbf{and} $result \neq$ \textbf{success}}
+                \State $i \gets i+1$
+                \State $result \gets $ \Call{DLS}{$v$, $i$}
+            \EndWhile
+            \State \Return{$result$}
+        \EndFunction
+    \end{algorithmic}
+\end{algorithm} \\
+
+
+IDS memiliki propooerti sebagai berikut \cite{stima-graph-2},
+\begin{itemize}
+    \item Completeness? Ya, jika $b$ terbatas
+    \item Optimality? Ya, jika langkah sama dengan biaya
+    \item Kompleksitas waktu: $O(b^d)$, dengan $b$ \textit{branching factor} dan $d$ kedalaman dari solusi terbaik
+    \item Kompleksitas ruang: $O(bd)$, dengan $b$ \textit{branching factor} dan $d$ kedalaman dari solusi terbaik
+\end{itemize} \\
+
+
+\subsubsection{Breadth First Search}
+
+Breadth First Search adalah teknik pencarian graf secara mendalam yang dapat digambarkan dengan algoritma berikut ini (traversal dimulai dari simpul $v$),
+\begin{enumerate}
+    \item Kunjungi simpul $v$
+    \item Kunjungi semua simpul yang bertetangga dengan simpul $v$ terlebih dahulu.
+    \item Kunjungi simpul berikutnya yang belum dikunjungi namun bertetangga dengan simpul-simpul yang telah dikunjungi, demikian seterusnya.
+\end{enumerate} \\
+
+Breadth First Search dapat menemukan jalur terpendek pada graf umum dengan syarat graf tersebut merupakan graf tidak berbobot \cite{cp-bfs}. \\
+
+Simpul-simpul yang dikunjungi pada traversal graf secara BFS dapat digambarkan sebagai pohon, dinamakan pohon BFS \cite{stima-graph-1}. \\
+
+Untuk melakukan BFS, diperlukan beberapa struktur data \cite{stima-graph-1}:
+\begin{enumerate}
+    \item Matriks ketetanggaan $A = [a_{ij}]$ yang berukuran $n \times n$,
+    \begin{itemize}
+        \item $a_{ij} = 1$, jika simpul $i$ dan simpul $j$ bertetangga,
+        \item $a_{ij} = 0$, jika simpul $i$ dan simpul $j$ tidak bertetangga.
+    \end{itemize}
+    \item Antrian $q$ untuk menyimpan simpul yang telah dikunjungi.
+    \item Tabel boolean untuk melacak simpul yang telah dikunjungi,
+    \begin{itemize}
+        \item $visited : array[l..n]$ of boolean
+        \item $visited[i] = true$ jika simpul $i$ sudah dikunjungi
+        \item $visited[i] = false$ jika simpul $i$ belum dikunjung.
+    \end{itemize}
+\end{enumerate} \\
+
+
+BFS dapat digambarkan dengan \textit{pseudo-code} berikut \cite{stima-graph-1},
+\begin{algorithm}[H]
+    \caption{Mengunjungi seluruh simpul graf dengan BFS} \label{alg:bfs}
+    \begin{algorithmic}
+        \Require Tabel boolean $visited$ telah diinisalisasi dan dapat diakses
+        \Require Struktur data antrian simpul $Q$ yang terinisalisasi dan kosong
+        \Statex
+
+        \Procedure{BFS}{$v$}
+            \State \textbf{Input:} \; $v$: simpul awal yang dikunjungi
+            \Statex
+
+            \While{\textbf{not} \Call{Empty}{$Q$}}
+                \State $x \gets $ \Call{Pop}{$Q$} 
+                \For{$y \in $ \Call{neighbour}{$x$}}
+                    \If{\textbf{not} $visited[y]$}
+                        \State \Call{Process}{$y$} \Comment{Proses simpul sesuai kebutuhan}
+                        \State \Call{Push}{$Q$, $y$}
+                    \EndIf
+                \EndFor
+            \EndWhile
+
+        \EndProcedure
+    \end{algorithmic}
+\end{algorithm} \\
+
+
+Selain itu, BFS juga memiliki properti-properti berikut ini \cite{stima-graph-2} \cite{cp-bfs},
+\begin{itemize}
+    \item Completeness? Ya (selama nilai b terbatas )
+    \item Optimality? Ya, jika langkah sama dengan ongkos
+    \item Kompleksitas waktu: $O(b^d)$ atau $O(m + n)$ dengan $b$ \textit{branching factor}, $d$ kedalaman dari solusi terbaik, $m$ jumlah simpul dan $n$ jumlah sisi.
+    \item Kompleksitas ruang: $O(b^d)$ atau $O(m)$ dengan $b$ \textit{branching factor}, $d$ kedalaman dari solusi terbaik, dan $m$ jumlah simpul
+    \item Memiliki heuristik untuk kurang baik dalam kompleksitas ruang.
+\end{itemize} \\
+
+\subsection{Lowest Common Ancestor} \label{section-lca}
+
+Misalnya $G = (V, E)$ adalah sebuah graf berbentuk tree dengan $V$ adalah himpunan simpul dan $E$ adalah himpunan sisi,
+akar dari $G$ adalah suatu simpul tertentu yang dipilih sebagai simpul paling atas dengan \textit{depth} bernilai nol,
+semua simpul lain pada $G$ akan memiliki \textit{depth} yang didefinisikan sebagai jarak DFS dari simpul tersebut ke simpul akar \cite{cp-lca}. \\
+
+Dapat didefinisikan sebuah \textit{ancestor} dari simpul $v \in V$ sebagai semua simpul pada jalur dari akar $G$ ke simpul $v$ (termasuk simpul akar dan simpul $v$ itu tersendiri) \cite{cp-lca}. \\
+
+Misal terdapat simpul $u, v \in V$ dan $S$ adalah himpunan seluruh simpul yang merupakan \textit{ancestor} dari $u$ dan \textit{ancestor} dari $v$,
+Lowest Common Ancestor (LCA) dari pasangan simpul $(u, v)$ adalah sebuah simpul $w \in S$ dengan \textit{depth} terbesar 
+(dengan kata lain, memiliki posisi "terbawah" atau paling jauh dari akar) \cite{cp-lca}. \\
+
+Sebagai contoh, \\
+
+$G: $
+\begin{center}
+    \begin{forest}
+        for tree={circle, draw, align=center}
+        [
+            1
+            [2
+                [7
+                    [9]
+                    [10]
+                ]
+                [8]
+            ]
+            [3
+                [4]
+                [5]
+                [6]
+            ]
+        ]
+    \end{forest}
+    \begin{itemize}
+        \item $LCA(8, 9) = 2$
+        \item $LCA(4, 6) = 3$
+        \item $LCA(2, 7) = 2$
+        \item $LCA(5, 5) = 5$
+        \item $LCA(6, 10) = 1$
+    \end{itemize} 
+\end{center} \\
+
+
+Permasalahan pencarian LCA dapat direduksi menjadi permasalahan Range Minimum Query (RMQ) yang juga merupakan salah satu permasalahan klasik dalam Strategi Algoritma \cite{cp-rmq}.
+Selain itu ada banyak teknik untuk mencari solusi LCA, diantaranya yaitu \cite{cp-lca}:
+\begin{itemize}
+    \item Bruteforce Naif
+    \item DFS dengan dua pointer
+    \item Binary Lifting
+    \item Algoritma Farach-Colton and Bender
+    \item Algoritma Offline Tarjan
+\end{itemize} \\
+
+\subsection{Binary Lifting} \label{section-binlift}
+
+Misalnya $G = (V, E)$ adalah sebuah graf berbentuk tree dengan $V$ adalah himpunan simpul, $E$ adalah himpunan sisi dan $N$ adalah banyaknya simpul pada $G$. \\
+
+Binary Lifting adalah teknik efisien untuk menemukan \textit{ancestor} ke-$k$ ($k \geq 0$) dari setiap simpul $v \in V$ menggunakan paradigma \textit{dynamic programming}.
+Teknik ini dilakukan dengan melakukan prekomputasi setiap \textit{ancestor} ke-$i$ ($i \in \{ 2^0, 2^1, \dots, 2^{\lceil \log N \rceil} \}$) dari setiap simpul $v \in V$
+yang dapat dilakukan menggunakan DFS dalam kompleksitas waktu $O(N \log N)$, kemudian setiap query untuk mencari \textit{ancestor} ke-$k$ dari sebuah simpul $v$ 
+akan bisa dijawab dalam kompleksitas waktu $O(\log k)$ \cite{cp-cses-book}. \\
+
+Implementasi Binary Lifting dapat dilakukan menggunakan struktur data \cite{cp-cses-book},
+\begin{center}
+    $ancestor[1..N][0..\lceil \log N \rceil]$: array of array of nodes
+\end{center}
+
+Misalkan terdapat suatu simpul $v$ yang memiliki \textit{parent} $p$. Relasi rekurens yang dapat digunakan untuk melakukan prekomputasi pada $v$ yaitu \cite{cp-binlift},
+\[ 
+ancestor[v][i] = 
+\begin{cases} 
+    p & i = 0 \\
+    ancestor[ancestor[v][i-1]][i-1] & i > 0 \\
+\end{cases}
+\]
+
+Prekomputasi harus dilakukan pada setiap simpul $v$ di $G$ dan 
+harus dipastikan bahwa sebelum melakukan prekomputasi pada suatu simpul, semua \textit{ancestor} simpul tersebut harus sudah di-prekomputasi (jika tidak, maka nilai prekomputasi untuk simpul tersebut tidak benar),
+sehingga cocok untuk menggunakan DFS untuk traversal yang digunakan.
+Program prekomputasi dan pencarian \textit{ancestor} ke-$k$ dapat digambarkan melalui \textit{pseudo-code} berikut ini \cite{cp-binlift} \cite{cp-cses-book},
+
+\begin{algorithm}[H]
+    \caption{Prekomputasi pada Binary Lifting} \label{alg:binlift-precompute}
+    \begin{algorithmic}
+        \Procedure{DFS\_Precompute}{$v$, $p$, $ancestor$, $N$}
+            \State \textbf{Input:} \; $v$: simpul yang dikunjungi saat ini
+            \State \qquad \qquad $p$: \textit{parent} dari $v$
+            \State \qquad \qquad $ancestor$: tabel prekomputasi setiap simpul
+            \State \qquad \qquad $N$: jumlah simpul pada tree
+            \Statex
+        
+            \State $ancestor[v][0] = p$
+            \For{$i \gets 1$ to $\lceil \log N \rceil$}
+                \State $ancestor[v][i] = ancestor[ancestor[v][i-1]][i-1]$
+            \EndFor
+            
+            \Statex
+
+            \For{$u \in $ \Call{neighbour}{$v$}}
+                \If{$u \neq p$}
+                    \State \Call{DFS\_Precompute}{$u$, $v$, $ancestor$} 
+                \EndIf
+            \EndFor
+
+        \EndProcedure
+
+        \Statex
+
+        \Procedure{Precompute}{$tree$, $ancestor$}
+            \State \textbf{Input:} \; $tree$: tree yang akan di-prekomputasi
+            \State \qquad \qquad $ancestor$: tabel prekomputasi setiap simpul
+            \Statex
+
+            \State $root \gets $ \Call{GetRoot}{$tree$}
+            \State $N \gets $ \Call{GetNodesCount}{$tree$}
+            \State \Call{DFS\_Precompute}{$root$, $root$, $ancestor$, $N$}
+            \Comment{Akar tree dianggap \textit{parent}-nya sendiri}
+        \EndProcedure
+    \end{algorithmic}
+\end{algorithm}
+
+
+\begin{algorithm}[H]
+    \caption{Teknik Binary Lifting untuk menemukan \textit{ancestor} ke-$k$ suatu simpul} \label{alg:kth-ancestor}
+    \begin{algorithmic}
+
+        \Require tabel prekomputasi simpul telah diisi dan berupa variabel global $ancestor$
+        \Require jumlah simpul dalam tree berupa variabel global $N$
+        \Statex
+
+        \Function{kth\_ancestor}{$v$, $k$}
+            \State \textbf{Input:} \; $v$: simpul yang akan dicari simpul \textit{ancestor}-nya
+            \State \qquad \qquad $k$: jarak ke simpul \textit{ancestor} yang dicari
+            \State \textbf{Output:} simpul yang merupakan \textit{ancestor} ke-$k$ dari $v$
+            \Statex
+
+            \State $u \gets v$
+            \For{$i \gets 0$ to $\lceil \log N \rceil$}
+                \If{bit ke-$i$ dihitung dari Least Signficant Bit pada $k$ bernilai $1$}
+                    \State $u \gets ancestor[u][i]$
+                \EndIf
+            \EndFor
+            \State \Return $u$
+
+        \EndFunction
+
+    \end{algorithmic}
+\end{algorithm} \\
+
+Perhatikan bahwa Binary Lifting memiliki kompleksitas memori sebesar $O(N \log N)$.
+
+\subsubsection{Pemanfaatan Binary Lifting pada LCA}
+
+Binary Lifting dapat digunakan sebagai salah satu teknik dalam mencari solusi LCA yang efisien.
+Setelah prekomputasi Binary Lifting dilakukan, sebuah kuery LCA dapat dihitung dalam kompleksitas waktu $O(\log N)$ \cite{cp-binlift}. \\
+
+Misal terdapat kueri untuk menemukan $LCA(x, y)$, 
+dengan memakai fungsi $\linebreak kth\_ancestor(x, k)$ yang telah dijelaskan pada Algoritma \ref{alg:kth-ancestor}, 
+kita dapat  dilakukan langkah-langkah algoritmik berikut untuk menemukan LCA \cite{cp-cses-book}:
+\begin{enumerate}
+    \item Asumsikan $depth(x) >= depth(y)$, jika tidak maka kembalikan hasil $LCA(y, x)$ (hasil akan identik)
+    \item Ambil $k = depth(x) - depth(y)$ dan $x = kth\_ancestor(x, k)$, dengan kata lain kita akan "menaikkan" $x$ sehingga $x$ dan $y$ berada pada \textit{depth} yang sama
+    \item Jika $x = y$ maka kembalikan simpul $x$ sebagai hasil kueri, jika tidak maka pergi ke langkah selanjutnya
+    \item Ambil $S = \{ 2^j \mid 2^j \leq depth(x), j \in \{0, 1, 2, \dots \} \}$,
+    Mulai dari nilai $i \in S$ yang terbesar hingga terkecil lakukan:
+    Jika $kth\_ancestor(x, i) \neq kth\_ancestor(y, i)$ maka ambil $x = kth\_ancestor(x, i)$ dan $y = kth\_ancestor(y, i)$
+    (Dengan kata lain, kita "menaikkan" $x$ dan $y$ bersamaan selama hasil "penaikkan" itu tidak menghasilkan $x = y$)
+    \item Sampai tahap ini, $x$ dan $y$ berada pada posisi "paling atas" sehingga $x \neq y$, 
+    karena suatu simpul hanya memiliki satu \textit{parent} maka akibatnya $parent(x) = parent(y) = LCA(x, y)$.
+    Kembalikan simpul $kth\_ancestor(x, 0)$ sebagai hasil kueri.
+\end{enumerate} \\
+
+
+Untuk lebih jelasnya, LCA menggunakan Binary Lifting dapat dipaparkan melalui \textit{pseudo-code} berikut \cite{cp-cses-book},
+\begin{algorithm}[H]
+    \caption{Solusi kueri LCA menggunakan teknik Binary Lifting} \label{alg:lca-binlift}
+    \begin{algorithmic}
+        \Require tabel prekomputasi simpul telah diisi dan berupa variabel global $ancestor$
+        \Require jumlah simpul dalam tree berupa variabel global $N$
+        \Statex
+
+        \Function{LCA}{$x$, $y$}
+            \State \textbf{Input:} \; $x$: simpul pertama yang akan dicari LCA-nya
+            \State \qquad \qquad $y$: simpul kedua yang akan dicari LCA-nya
+            \State \textbf{Output:} simpul yang merupakan $LCA(x, y)$
+            \Statex
+
+            \If{\Call{depth}{x} $ < $ \Call{depth}{y}}
+                \State \Return \Call{LCA}{$y$, $x$}
+            \EndIf
+            
+            \Statex
+
+            \State $k \gets $ \Call{depth}{x} $ - $ \Call{depth}{y}
+            \State $z \gets $  \Call{kth\_ancestor}{$x$, $k$}
+            \If{$z = y$}
+                \State \Return $z$
+            \EndIf
+
+            \Statex
+
+            \For{$i \gets \lceil \log N \rceil$ to $0$}
+                \If{$i \leq $ \Call{depth}{z} \textbf{and} \Call{kth\_ancestor}{$y$, $i$} $\neq$  \Call{kth\_ancestor}{$z$, $i$}}
+                    \State $y \gets $ \Call{kth\_ancestor}{$y$, $i$}
+                    \State $z \gets $ \Call{kth\_ancestor}{$z$, $i$}
+                \EndIf
+            \EndFor
+            \State \Return \Call{kth\_ancestor}{$z$, $0$}
+        \EndFunction
+
+    \end{algorithmic}
+\end{algorithm} \\
+
+
+\subsection{HTML dan DOM Tree}
+
+HTML (\textit{HyperText Markup Language}) adalah bahasa formal bertipe \textit{markup language} yang digunakan untuk mendefinisikan
+arti dan struktur sebuah konten web. HTML biasanya digunakan bersamaan dengan teknologi web lain seperti CSS, JavaScript, WebAssembly, dan lain-lain.
+HTML menggunakan elemen spesial untuk mendeskripsikan konten, elemen tersebut dikatakan sebagai HTML Element \cite{mozilla-html}. \\
+
+Sebuah HTML Element dibedakan dari teks biasa dengan menggunakan \textit{tags}, yaitu nama elemen tersebut yang dikelilingi oleh karakter '<' dan '>'.
+Nama dari HTML Element bersifat \textit{case-insensitive}. Sebuah dokumen HTML selalu memiliki elemen pertama dengan nama elemen "html".
+Adapun beberapa elemen spesial lainnya yang terdefinisi dalam spesifikasi HTML yaitu \cite{mozilla-html},
+\begin{minted}{html}
+    <head>
+    <title>
+    <body>
+    <p>
+    <div>
+    <footer>
+\end{minted} \\
+
+Terdapat juga bahwa sebuah \textit{tag} dari elemen HTML harus ditutup dengan \textit{tag} dengan nama elemen yang sama,
+tetapi memiliki simbol '/' sebelum simbol '>' penutup. Sehingga kebanyakan elemen HTML dideskripsikan melalui dua buah \textit{tag}, yang terdiri dari \textit{tag} pembuka dan penutup. 
+Tetapi terdapat juga elemen HTML yang bersifat \textit{self-closing}, yaitu hanya terdiri dari sebuah \textit{tag} yang berlaku sebagai pembuka dan penutup secara bersamaan \cite{mozilla-html}. \\
+
+Selain itu, sebuah elemen HTML tidak hanya memiliki nama saja, tetapi dapat juga memiliki atribut-atribut tambahan.
+Atribut-atribut tersebut dapat dideskripsikan sebagai kumpulan pasangan nama atribut beserta nilai atribut yang dipisahkan oleh simbol '=',
+kemudian antara atribut yang berbeda dipisahkan oleh karakter \textit{whitespaces}. Atribut juga bisa saja tidak memiliki nilai sehingga hanya memiliki nama atribut saja \cite{mozilla-html}. \\
+
+
+Semua atribut suatu elemen harus tertampung pada \textit{tag} pembuka (atau pembuka-penutup pada \textit{self-closing tag}), atau dalam kata lain harus muncul setelah nama \textit{tag} dan sebelum karakter penutup '>'.
+Jika terdapat lebih dari satu nama atribut yang sama, maka nilai atribut yang pertama muncul-lah yang akan diasosiaskan dengan nama atribut tersebut.
+Adapun contoh-contoh \textit{tag} yang mendeksripsikan elemen HTML diantaranya \cite{mozilla-html}:
+\begin{minted}{html}
+    <head> </head>
+    <p> Hello World! </p>
+    <div level="1"> <div level="2"> </div> </div>
+    <input type="radio" id="input-1" name="choices" checked />
+\end{minted} //
+
+
+Dokumen HTML yang mendeskripsikan konten web dapat dikonversi menjadi sebuah DOM (\textit{Document Object Model}),
+DOM tersebut merepresentasikan konten pada dokumen dalam bentuk struktur data tree, dimana setiap simpul adalah elemen HTML.
+Metode ini memungkinkan konten web untuk diakses dan dimodifikasi secara programmatik, modular dan memiliki skalabilitas tinggi \cite{mozilla-dom}. \\
+
+Sebagai contoh, perhatikan dokumen HTML berikut ini:
+\begin{minted}{html}
+    <html lang="en">
+        <head>
+            <title>My Document</title>
+        </head>
+        <body>
+            <h1>Header</h1>
+            <p>Paragraph</p>
+        </body>
+    </html>
+\end{minted} \\
+
+Dokumen tersebut dapat digambarkan sebagai DOM Tree berbentuk berikut ini \cite{mozilla-dom},
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=8cm, height=5cm]{section2-dom-tree.png}
+    \caption{Ilustrasi contoh DOM Tree HTML}
+    \label{fig:section2-dom-tree}
+\end{figure} \\
+
+
+Adapun untuk mengubah dokumen HTML menjadi sebuah DOM Tree diperlukan tahapan-tahapan berikut \cite{html-spec},
+\begin{enumerate}
+    \item Melakukan dekodifikasi \texit{byte} yang datang dari sumber pengirim dokumen.
+    \item Melakukan \textit{pre-processing} pada masukan yang datang, dengan cara menentukan \textit{encoding}, menghilangkan karakter terntentu, ataupun menentukan validitas berdasarkan karakterk kontrol tertentu.
+    \item Melakukan tokenisasi menjadi 69 token yang terdefinisi
+    \item Membentuk DOM Tree sesuai token yang ada dengan menggunakan struktur data \textit{stack}
+    \item Melakukan eksekusi \textit{script} pada dokumen jika ada, dan merubah bentuk DOM Tree sesuai \textit{script} yang terdefinisi
+\end{enumerate} \\
+
+\subsection{CSS Selector}
+
+CSS (\textit{Cascading Style Sheet}) merupakan bahasa formal yang berbasis aturan (\textit{rule-based}).
+CSS dapat digunakan untuk memberikan \textit{style} pada sebuah dokumen HTML, dimana \textit{style} tersebut dapat diinterpretasikan oleh sebuah \textit{web browser}.
+Bahasa CSS diorganisasikan menjadi beberapa modul fungsionalitas, misalnya modul \textit{styling} teks, latar belakang, animasi, tabel, dan lain-lain \cite{mozilla-css}. \\
+
+Dalam mendeskripsikan aturan pemberian \textit{style} pada sebuah dokumen HTML, CSS memanfaatkan struktur HTML yang dapat dibuat menjadi sebuah \textit{tree}, lebih tepatnya DOM Tree.
+Umumnya CSS digunakan dengan memberikan spesifikasi terhadap aturan \textit{styling} tertentu untuk himpunan simpul DOM Tree tertentu.
+Untuk menyatakan himpunan simpul tersebut digunakan CSS Selector, kemudian himpunan tersebut akan diberikan beberapa CSS Rule yang berbentuk deklarasi himpunan \textit{property} dan \textit{value}. \cite{mozilla-css} \\
+
+CSS Selector adalah salah satu modul fungsionalitas CSS yang memiliki fungsi \textit{pattern-matching} untuk memberikan spesifikasi himpunan simpul DOM Tree yang dipilih.
+Ada banyak sekali komponen dari modul CSS Selector, tipe-tipe komponen selector umumnya dapat kita kategorikan menjadi \cite{mozilla-selector},
+\begin{enumerate}
+    \item \textbf{Basic Selector}
+    \begin{itemize}
+        \item \textbf{Type Selector}, memilih simpul berdasarkan nama dari \textit{tag} HTML.
+        \item \textbf{Universal Selector (*)}, memilih simpul apa saja dari DOM Tree.
+        \item \textbf{Class Selector (.)}, memilih simpul berdasarkan kelas elemen tertentu.
+        \item \textbf{ID Selector (#)}, memilih simpul berdasarkan ID unik elemen tertentu.
+    \end{itemize}
+    \item \textbf{Attribute Selector ([])}, selektor yang mencocokkan nilai atribut dari sebuah \textit{tag} HTML dengan berbagai variasi tertentu, misalnya \textit{substring matching}, \textit{prefix matching}, \textit{suffix matching}, dan lain-lain.
+    \item \textbf{Pseudo-Class Selector (:)}, selektor yang mencocokkan simpul DOM Tree menggunakan informasi yang tidak terdapat langsung pada tree tersebut, misalnya mencocokkan elemen berdasarkan interaksi \textit{mouse} atau \textit{keyboard} pengguna.
+    \item \textbf{Pseudo-Element Selector (::)}, selektor yang mencocokkan simpul sehingga aturan \textit{styling} dapat diberikan pada bagian tertentu elemen secara parsial, misalnya mencocokkan elemen sehingga baris pertama paragraf tertentu dapat memiliki \textit{style}.
+    \item \textbf{Compund Selector}, gabungan beberapa selektor dasar menjadi rantai selektor yang lebih panjang, selektor dasar tersebut dapat memiliki Attribute Selector, Pseudo-Class Selector, ataupun Pseudo-Element Selector.
+    \item \textbf{Combinator}, merupakan operator penggabungan beberapa Compound Selector.
+    \begin{itemize}
+        \item \textbf{Descendant ( )}, menyatakan operator yang mencocokkan elemen di kanan sebagai keturunan dari elemen di kiri operator.
+        \item \textbf{Child (>)}, menyatakan operator yang mencocokkan elemen di kanan sebagai anak langsung dari elemen di kiri operator.
+        \item \textbf{Subsequent-Sibling (~)}, menyatakan operator yang mencocokkan elemen di kanan sebagai elemen yang memiliki \textit{parent} yang sama dengan elemen di kiri dan terletak setelahnya dalam urutan \textit{pre-order traversal}.
+        \item \textbf{Next-Sibling (+)}, menyatakan operator yang mencocokkan elemen di kanan sebagai elemen pertama yang dikunjungi melalui \textit{parent} kedua elemen tersebut dalam urutan \textit{pre-order traversal}.
+        \item \textbf{Column (||)}, menyatakan operator yang mencocokkan simpul yang berada pada sebuah kolom tabel atau grid.
+    \end{itemize}
+    \item \textbf{Complex Selector}, merupakan gabungan beberapa Compound Selector yang digabungkan menggunakan Combinator sehingga menjadi rantai yang lebih kompleks.
+    \item \textbf{Selector List}, merupakan gabungan beberapa Complex Selector yang digabungkan menggunakan koma (',').
+    \item \textbf{Namespace Separator ('|')}, merupakan operator khusus yang membatasi pencocokan selektor lainnya berdasarkan \textit{namespace} HTML tertentu, misalnya \textit{namespace} SVG dan MathML.
+\end{enumerate} \\
+
+
+Dokumen HTML yang dipadukan dengan CSS akan diinterpretasikan dengan langkah-langkah sebagi berikut \cite{mozilla-css},
+\begin{enumerate}
+    \item Browser memuat dokumen HTML dan membangun sebuah DOM Tree.
+    \item Jika terdapat aturan CSS, maka browser melakukan pencocokkan CSS Selector, dengan tahapan tokenisasi, pembentukan struktur selektor, dan pencocokan dengan \textit{tree traversal}.
+    \item Semua aturan CSS yang ditemukan akan dicocokkan berdasarkan CSS Selector yang sesuai.
+    \item Aturan CSS akan diaplikasikan ke DOM Tree sehingga terbentuk Render Tree, yang akan digunakan Rendering Engine untuk membuat tampilan GUI.
+\end{enumerate} \\
+
+
+
+\subsection{Client-Server Architecture}
+
+Arsitektur Client-Server adalah istilah umum yang biasa digunakan dalam arsitektur sistem modern untuk mendeskripsikan
+arsitektur aplikasi yang membagi pemrosesan ke dalam lebih dari satu proses dan umumnya juga dalam perangkat keras yang berbeda \cite{client-server}. \\
+
+Pembagian tersebut dilakukan berdasarkan spesialisasi dan kebutuhan, misalnya Web Browser (client) akan menampilkan antarmuka
+sedangkan Webserver (Server) akan melakukan manajemen \textit{networking} dan menjamin penyaluran data. \cite{client-server} \\
+
+Salah satu contoh arsitektur Client-Server yang paling sederhana yaitu \textit{two-tier architecture}. 
+Arsitektur jenis ini umumnya memberikan antarmuka sederhana bagi pengguna untuk mendapatkan informasi yang tersentralisasi
+tanpa memberikan interpretasi data atau pemrosesan data yang intensif. Contoh aplikasi yang memakai arsitektur ini yaitu \cite{client-server},
+\begin{itemize}
+    \item \textbf{Email}
+    \item \textbf{Telnet}
+    \item \textbf{FTP} (File Transfer Protocol)
+    \item \textbf{Gopher}
+    \item \textbf{Web}.
+\end{itemize} \\
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=8cm, height=5cm]{section2-two-tier.png}
+    \caption{Ilustrasi sistem \textit{two-tier architecture}}
+    \label{fig:section2-two-tier}
+\end{figure}
+
+Arsitektur dengan tipe \textit{two-tier architecture} juga memiliki limitasi yang perlu dipikirkan oleh arsitek sistem \cite{client-server},
+\begin{enumerate}
+    \item \textbf{Fat Clients}, yaitu permasalahan dimana dengan semakin berkembangnya teknologi maka fungsionalitas client
+    akan berkembang sangat kompleks sehingga Server tidak bisa mengikuti perkembangan dengan baik
+    \item \textbf{Object Reuse}, yaitu penggunaan data tersentralisasi yang "diulangi" sehingga terdapat duplikat dan
+    akibatnya akan sulit menjaga integritas data, hal ini sering terjadi karena fungsionalitas antar komponen pada sistem
+    \textit{two-tier} yang berbeda cenderung mirip.
+\end{enumerate} \\
+
+Untuk meningkatkan desain sistem, dapat digunakan \textit{three-tier architecture} yang mengisolasikan pemrosesan data
+pada suatu lapisan baru yang berbeda dengan lapisan inti program. Lapisan tersebut biasanya disebut sebagai lapisan basis data. \cite{client-server} \\
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=12cm, height=6cm]{section2-three-tier.png}
+    \caption{Ilustrasi sistem \textit{three-tier architecture}}
+    \label{fig:section2-three-tier}
+\end{figure}
+
+
+
+
+\subsection{Parallel Computing}
+
+Paradigma komputasi parallel (\textit{parallel computing}) adalah teknik komputasi dengan cara menggunakan lebih dari satu sumber daya komputasi di saat yang bersamaan. 
+Paradigma ini dapat digunakan untuk menyelesaikan masalah dengan cara memecah permasalahan menjadi upa-permasalahan lebih kecil yang independen satu sama lain dan hasilnya dapat digabungkan menjadi solusi global, 
+kemudian upa-permasalahan dibagi kepada sumber daya komputasi berbeda, dan penemuan solusi dilakukan bersamaan dengan teknik sinkronisasi tertentu \cite{parallel-comp}. \\
+
+Kemampuan komputasi parallel dapat dihasilkan dengan beberapa cara misalnya \cite{parallel-comp},
+\begin{itemize}
+\item Lebih dari satu unit fungsional (cache L1, cache L2, cabang, prefetch, decode, floating-point, pemrosesan grafis (GPU), integer, dll.)
+\item Lebih dari satu unit/\textit{core} eksekusi
+\item Lebih dari satu \textit{core} perangkat keras
+\item Jaringan komputer yang terdiri dari banyak komputer dan berdiri sendiri untuk membuat cluster komputer parallel yang lebih besar.
+\end{itemize}
+
+Aplikasi komputasi parallel dalam suatu perangkat keras merupakan tanggung jawab sistem operasi perangkat keras tersebut. 
+Umumnya sistem operasi akan mengimplementasikan mekanisme \textit{context switching} yang dapat memberikan manfaat \textit{concurrency} dan \textit{parallellism}. 
+\textit{Concurrency} yaitu kemampuan untuk mengerjakan banyak proses dalam waktu yang sama dengan cara berganti proses secara cepat, tanpa sumber daya komputasi tambahan. 
+Sedangkan \textit{Parallelism} adalah kemampuan untuk mengerjakan banyak proses dalam waktu yang sama dengan cara menggunakan sumber daya komputasi lainnya secara maksimal. \cite{parallel-comp} \cite{os-book} \\
+
+Aplikasi \textit{parallel computing} yaitu \textit{parallel programming}. 
+Dalam pembuatan program komputer modern, unit terkecil eksekusi yang biasa digunakan yaitu \textit{thread}, kumpulan \textit{thread} yang memiliki ruang memori yang sama akan membentuk \textit{process}. 
+Penggunaan \textit{multi-threading} dibandingkan \textit{multi-processing} lebih diutamakan karena, \textit{context switch} antar \textit{thread} lebih murah secara komputasional. 
+Selain itu \textit{thread} juga saling berbagi bagian data \textit{heap} dan \textit{global} sehingga dapat lebih mudah untuk sinkronisasi. \cite{os-book} \\
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{section2-thread.png}
+    \caption{Ilustrasi \textit{multi-threading} pada komputer}
+    \label{fig:section2-thread}
+\end{figure}
+
+
+Sinkronisasi perlu dilakukan antar unit eksekusi yang saling berbagi data pada alamat memori yang sama, jika tidak maka akan terjadi \textit{race condition}. 
+Teknik sinkronisasi yang dapat dilakukan antar unit eksekusi yaitu diantaranya \cite{parallel-comp},
+\begin{itemize}
+    \item \textbf{Barrier}, sebuah unit komputasi akan melakukan sebuah pekerjaan hingga mencapai suatu "batasan" dan akan berhenti
+    \item \textbf{Lock / semaphore}, digunakan untuk melindungi data global dengan mekanisme kunci sehingga hanya satu unit komputasi yang bisa memodifikasi data pada suatu waktu
+    \item \textbf{Synchronous communication operations}, unit komputasi saling berkomunikasi satu sama lain untuk menyelesaikan pekerjaan tertentu
+\end{itemize} \\
+
+
+\subsection{Virtualisasi dan Kontainerisasi}
+
+Virtualisasi adalah teknik mengabstraksi dan mengatur sumber daya dari perangkat keras sehingga perangkat lunak mendapat sumber daya virtual dibanding sumber daya asli.
+Fitur sistem operasi yang dapat mem-virtualisasikan sumber daya seperti fitur \textit{time-sharing} dan \textit{virtual memory},
+menginisasikan munculnya teknologi virtualisasi dengan \textit{hypervisor}. Hasilnya, muncullah teknologi \textit{virtual machine}
+yang memungkinkan manajemen lebih dari satu sistem operasi pada suatu mesin \cite{virt-cont}. \\
+
+Teknologi virtualisasi memberikan keuntungan yang besar karena berhasil meningkatkan nilai perangkat keras. 
+Sehingga pada awalnya menjadi \textit{state-of-the-art} dalam urusan \textit{deployment and operation}.
+Tetapi teknologi virtualisasi dengan \textit{hypervisor} memakan banyak memori dan memiliki \textit{overhead}
+dari manajemen banyak sistem operasi, sehingga dikembangkan teknologi kontainerisasi \cite{docker}. \\
+
+Kontainerisasi adalah cara virtualisasi yang lebih ringan dan cepat, dengan cara menggabungkan seluruh kode dan data
+yang berkaitan ke dalam suatu proses tertentu yang akan mengatur isolasi menggunakan fitur dari sistem operasi \textit{host}.
+Pada dasarnya, sistem operasi \textit{host} tersebut-lah yang harus memberikan antarmuka untuk mengisolasi sumber daya \cite{virt-cont}. \\
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=13cm, height=6cm]{section2-virt.png}
+    \caption{Ilustrasi virtualisasi dan kontainerisasi}
+    \label{fig:section2-virt}
+\end{figure} \\
+
+Spesifikasi kontainerisasi diatur oleh OCI (Open Container Initiative). 
+Salah satu teknologi kontainerisasi yang banyak digunakan yaitu Docker Engine yang memiliki tujuan untuk memudahkan pembuatan kontainer menggunakan \textit{image}.
+Arsitektur Docker Engine sangat modular dan terdiri dari lapisan-lapisan \cite{docker}:
+\begin{enumerate}
+    \item \textbf{Docker client}, antarmuka bagi pengguna untuk menjalankan fitur Docker Engine (biasanya melalui CLI)
+    \item \textbf{Docker daemon}, menerima \textit{request} dari Docker Client dan meneruskannya melalui API ke komponen lain
+    \item \textbf{containerd}, proses modular yang mengatur daur hidup dari sebuah kontainer
+    \item \textbf{shim}, proses yang menjaga agar integritas kontainer tetap terjaga walaupun terjadi masalah dengan Docker ataupun containerd
+    \item \textbf{runc}, proses yang memiliki tanggung jawab untuk membuat kontainer berdasarkan spesifikasi OCI dan mengakses primitif isolasi dari fitur sistem operasi
+\end{enumerate} \\
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=6cm]{section2-docker.png}
+    \caption{Ilustrasi arsitektur Docker Engine}
+    \label{fig:section2-docker}
+\end{figure} \\
+
+Docker Engine menggunakan sebuah format \textit{image} untuk mendeskripsikan sebuah kontainer. 
+Template tersebut akan diinterpretasikan oleh Docker Engine menjadi beberapa lapisan \texit{read-only} yang modular.
+Lapisan-lapisan tersebut didesain sesuai spesifikasi OCI dan akan menjadi bahan bagi \textbf{runc} untuk membuat \textit{runtime} kontainer \cite{docker}. \\
+
+Untuk membuat sebuah Docker Image, beberapa contoh perintah primitif yang dapat digunakan yaitu \cite{docker}:
+\begin{itemize}
+    \item \textbf{FROM}: untuk menggunakan basis lapisan untuk image saat ini
+    \item \textbf{RUN}: untuk menjalankan eksekusi proses tertentu saat proses pembuatan kontainer
+    \item \textbf{COPY}: untuk menyalin file tertentu dari \textit{host} ke kontainer saat proses pembuatan kontainer
+    \item \textbf{WORKDIR}: untuk menentukan \textit{working directory} proses utama kontainer
+    \item \textbf{EXPOSE}: untuk menentukan nomor \textit{port} yang di-ekspos dari \textit{network namespace} kontainer ke \textit{host} 
+    \item \textbf{CMD}: untuk menentukan \textit{command} eksekusi program yang akan menjadi proses utama dari kontainer
+dan lain sebagainya. \\
+
 \pagebreak
+
+
 
 \section{Aplikasi DFS dan BFS}
 
+Pada permasalahan ini kita diberikan sebuah DOM Tree dan CSS Selector yang mendeskripsikan subhimpunan dari himpunan semua simpul DOM Tree tersebut.
+Pada dasarnya, kita perlu mencari subhimpunan tersebut melalui algoritma traversal graf klasik, dimana traversal dilakukan dengan mengecek sebuah fungsi validasi pada setiap simpul. \\
+
+Algoritma DFS dan BFS dapat sangat berguna disini, karena algoritma tersebut memenuhi properti \textit{completeness} yang menjamin solusi subhimpunan pasti ditemukan.
+
+
+\subsection{Perancangan DFS dan BFS}
+Perancangan algoritma DFS dan BFS perlu diperhatikan dengan tepat karena perlu memperhatikan hal-hal berikut,
+\begin{itemize}
+    \item Perilaku Multi-threading
+    \item Perilaku Combinator
+    \item Perilaku Selector List dibanding Complex Selector biasa
+\end{itemize} \\
+
+
+\subsubsection{Perilaku Multi-Threading}
+
+Terdapat tantangan tersendiri dalam implementasi traversal DOM Tree. Umumnya desain implementasi yang palint mudah (dan naif) yaitu
+dengan membuat implementasi DFS secara rekursif, dimana pada setiap rekursi akan dibuat thread yang baru. \\
+
+Akan tetapi cara tersebut sangat buruk karena untuk memanfaatkan parallelisme secara maksimal, 
+jumlah thread yang harus dibuat harus sama dengan jumlah \textit{core} pada CPU pengguna. \\
+
+Sehingga pilihan desain paling tepat yaitu untuk membuat algoritma iteratif menggunakan struktur data global yang \textit{thread-safe},
+struktur data global tersebut akan menyimpan sebuah struktur yang mendeskripsikan tugas yang bisa dilakukan sebuah \textit{thread} saat mengunjungi DOM Tree tertentu. \\
+
+Sehingga konsep  algoritma yang akan digunakan yaitu,
+\begin{itemize}
+    \item Sebuah thread utama akan menginisialisasi semua struktur data, dan memasukkan "tugas" pertama pada struktur data global
+    \item Setiap thread anak akan berusaha mengambil "tugas" dari struktur data global (tugas untuk mengunjungi suatu simpul dan memprosesnya)
+    \item Tugas yang dilakukan thread anak akan juga memasukkan "tugas" baru ke struktur data global (yaitu tugas untuk mengunjungi anak dari simpul saat ini)
+    \item Setiap thread akan melakukan \textit{busy-waiting} jika struktur data global kosong hingga dia mendapat tugas
+    \item Setiap thread yang sudah mendapat tugas akan ditandai sebagai aktif, dan jika tugasnya selesai maka ditandai non-aktif
+    \item Setiap thread akan berhenti jika struktur data global kosong dan tidak ada thread lagi yang ditandai sebagai aktif
+\end{itemize} \\
+
+
+Perlu diperhatikan bahwa tipe struktur data global akan mempengaruhi tipe traversal. 
+Jika digunakan \textit{stack} maka akan menjadi DFS, dan jika digunakan \textit{queue} maka menjadi BFS. \\
+
+
+\subsubsection{Perilaku Combinator}
+
+CSS Selector dapat memiliki beberapa Combinator (mungkin nol dan mungkin lebih dari satu), 
+perbedaan tipe Combinator akan menyebabkan perbedaan perilaku \textit{branching} dalam traversal, baik itu untuk DFS ataupun BFS. \\
+
+Setiap mengunjungi sebuah simpul dalam DFS/BFS, kita tentunya butuh selector saat ini yang akan di-cocokkan dengan simpul yang dikunjungi.
+Perlu diperhatikan beberapa observasi perilaku berikut ini terhadap combinator yang berada sebelum selector saat ini,
+\begin{enumerate}
+    \item Untuk combinator tipe Descendant (' '), maka selector saat ini akan diteruskan ke semua simpul anak kecuali combinator dari selector selanjutnya juga Descendant (' ').
+    \item Untuk combinator tipe Child ('>'), jika simpul saat ini cocok dengan selector saat ini maka selector selanjutnya akan diteruskan ke simpul anak, selain itu tidak ada selector yang dilanjutkan ke simpul anak
+    \item Untuk combinator tipe SubsequentSibling ('~'), maka selector saat ini akan diteruskan ke simpul saudara selanjutnya kecuali combinator dari selector selanjutnya juga SubsequentSibling ('~').
+    \item Untuk combinator tipe NextSibling ('+'), jika simpul saat ini cocok dengan selector saat ini maka selector selanjutnya akan diteruskan ke simpul saudara selanjutnya, selain itu tidak ada selector yang dilanjutkan ke simpul saudara.
+    \item Jika sebelumnya tidak ada combinator, maka lakukan perliaku seakan combinator sebelumnya adalah Descendant (' ').
+\end{enumerate} \\
+
+Untuk mempermudah implementasi perilaku combinator yang berhubungan dengan \textit{sibling} dari simpul saat ini,
+maka untuk setiap kunjungan ke suatu simpul akan disimpan \textit{pointer} ke \textit{parent} dari simpul tersebut,
+dan juga posisi urutan relatif simpul tersebut terhadap anak-anak lain dari \textit{parent}.
+
+
+\subsubsection{Perilaku Selector List}
+
+Kueri untuk CSS Selector dapat berupa sebuah Selector List yang merupakan kumpulan CSS Selector yang dipisahkan oleh koma. \\
+
+Perlu diperhatikan bahwa perilaku setiap simpul terhadap Selector List tersebu yaitu, jika setidaknya terdapat satu CSS Selector diantar Selector List
+tersebut yang cocok terhadap simpul tersebut, maka simpul dianggap cocok. \\
+
+\begin{minted}{css}
+    div > li, p ~ a + span, body
+\end{minted} \\
+
+Oleh karena itu, operasi tersebut identik dengan operasi gabungan himpunan.
+Dimana hasil pencocokan untuk sebuah Selector List adalah gabungan dari operasi pencocokan setiap CSS Selector pada Selector List tersebut. \\
+
+Observasi ini sangat penting karena terlihat bahwa operasi pencocokan dapat diparalelisasi untuk setiap CSS Selector yang dipisahkan koma,
+alias kita tidak perlu mencocokkan dari kiri ke kanan secara berurutan. Tetapi pada saat yang sama bisa langsung saja melakukan traversal BFS/DFS secara parallel terhadap setiap CSS Selector. \\
+
+Perilaku ini dapat kita manfaatkan dengan memasukkan tugas ke struktur data global berupa perintah mengunjungi
+simpul akar sebanyak $n$ kali, dimana $n$ adalah jumlah CSS Selector dalam Selector List, 
+dan setiap CSS Selector dimasukkan ke salah satu dari tugas tersebut. \\
+
+
+Sehingga algoritma traversal yang digunakan dapat digambarkan sebagai berikut,
+\begin{enumerate}
+    \item Buat sebuah struktur yang mendeskripsikan perintah kepada sebuah thread untuk mengunjungi sebuah simpul, struktur tersebut berisi [\textit{pointer} ke simpul tersebut, \textit{pointer} ke \textit{parent} simpul tersebut, posisi relatif simpul dalam urutan anak \textit{parent}, Unit CSS Selector saat ini].
+    \item Buat sebuah struktur global yang mampu menyimpan daftar struktur perintah dari (1), pastikan struktur global \textit{thread-safe} dan dapat dijangkau setiap thread.
+    \item Thread utama akan menginisiasi traversal dengan memasukkan perintah untuk mengunjungi simpul akar, dengan unit CSS Selector pertama, untuk setiap CSS Selector pada Selector List.
+    \item Setiap thread akan berlomba-lomba "menghabiskan" struktur data global, untuk setiap saat thread akan mengambil satu perintah dari situ dan menjalankannya (yang akan memasukkan perintah selanjutnya ke struktur global)
+    \item Jika struktur data global kosong, dan tidak ada thread yang sedang mengerjakan perintah, maka terminasi setiap thread dan kembalikan hasil traversal yang cocok.
+\end{enumerate} \\
+
+Dengan membuat struktur global sebagai LIFO (\textit{Last-in-first-out}) maka kita akan menjalankan DFS, 
+sedangkan jika FIFO (\textit{First-in-first-out}) maka akan berjalan BFS. Desain ini membuat kode cukup \textit{reusable} dan modular. \\
+
+
+\subsection{Perancangan LCA} \label{section-lca-design}
+
+LCA sesuai yang dijelaskan pada bagian \ref{section-lca} secara teknis merupakan traversal jenis DFS, 
+ada dua observasi yang dapat dilakukan untuk melakukan perancangan LCA,
+\begin{enumerate}  
+    \item setiap simpul pada tree pasti hanya memiliki satu \textit{parent}, sehingga untuk menuju \textit{ancestor} tertentu hanya terdapat satu jalur yang mendalam.
+    \item untuk menghitung $LCA(a, b, \dots, z)$ perlu dihitung $LCA(LCA(LCA(a, b), c), \dots)$ sehingga untuk pekerjaan mencari $LCA$ dengan masukan lebih dari satu tetap diperlukan iterasi dua-pasang secara rekursif.
+\end{enumerate} \\
+
+Karena kedua fakta tersebut maka jelas bahwa operasi LCA tidak bisa menjadi parallel, dan lebih baik di desain agar tidak menggunakan \textit{mult-threading}. 
+Sehingga untuk efisiensi dapat kita gunakan teknik \textit{binary lifting} sesuai bagian \ref{section-binlift}. \\
+
+Tetapi masalah yang harus dihadapi yaitu bagaimana cara memetakan isi simpul DOM Tree menjadi simpul berisi angka saja,
+hal ini perlu dilakukan karena teknik \textit{binary lifting} membutuhkan simpul berupa elemen yang dapat diidentifikasi secara unik dan terurut, seperti bilangan bulat
+(hal tersebut konsekuensi dari paradigma teknik \textit{binary lifting} yang merupakan \textit{dynamic programming}). \\
+
+Solusi terbaik yang dapat dilakukan yaitu untuk memetakan \textit{pointer} setiap simpul DOM Tree menjadi sebuah bilangan bulat melalu struktur data HashTable,
+Hal ini dapat bekerja karena pastilah \textit{pointer} untuk setiap objek dinamis akan berbeda, sehingga dapat menjadi pemetaan. \\
+
+Setelah memecahkan masalah-masalah tersebut, desain algoritma dapat langsung mengikuti secara persis seperti teori yang telah dijelaskan pada \ref{section-lca} \ref{section-binlift}.
 
 \pagebreak
+
+
 
 \section{Implementasi dan Pengujian}
 
 \subsection{Implementasi}
+
+Implementasi secara garis besar dibagi menjadi dua buah proyek, 
+yaitu server backend yang mengatur logika parsing dan traversal,
+kemudian ada aplikasi frontend dalam bentuk konten web yang akan menjadi antarmuka pengguna
+
+
+\subsubsection{Backend Server}
+
+Implementasi server backend dilakukan menggunakan bahasa pemrograman \textbf{Rust} dan \textit{package manager}/\textit{build tools} \textbf{Cargo}. \\
+
+Digunakan \textit{framework} eksternal yaitu \textbf{html5gum} dan \textbf{css\_lexer}, 
+dimana keduanya hanya membantu melakukan tokenisasi elemen-elemen HTML dan CSS. 
+Selain itu digunakan teknik memori manajemen menggunakan tipe \textit{built-in} Arc (\textit{asynchronous reference counting}) pointer dari bahasa pemrograman \textbf{Rust}. \\
+
+Detail implementasi meliputi beberapa file berikut:
+\begin{itemize}
+    \item \textbf{async\_util.rs}, file ini berisi struktur yang akan membantu dalam melakukan \textit{multi-threading}.
+    \item \textbf{css\_selector.rs}, file ini berisi seluruh fungsionalitas \textit{parser} CSS Selector yang dibuat.
+    \item \textbf{html.rs}, file ini berisi seluruh fungsionalitas \textit{parser} HTML yang dibuat.
+    \item \textbf{matching.rs}, file ini berisi fungsi pembantu untuk pencocokan hubungan antara simpul DOM Tree dengan CSS Selector.
+    \item \textbf{traversal.rs}, file ini berisi logika utama \textit{multi-threaded} DFS dan BFS.
+    \item \textbf{lca.rs}, file ini berisi logika utama teknik \textit{binary lifting} dan LCA yang digunakan.
+    \item \textbf{main.rs}, file ini berisi logika server utama yang akan menerima dan merespon request untuk mengirim aplikasi frontend dalam bentuk konten web.
+\end{itemize} \\
+
+
+Struktur yang digunakan untuk menyimpan simpul DOM Tree adalah sebagai berikut, simpul DOM Tree akan dibagi menjadi dua kasus, antara menjadi elemen HTML atau hanya teks biasa,
+\begin{minted}{rust}
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum Node {
+        Element(Arc<Element>),
+        Text(Arc<String>)
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct Element {
+        pub tag: String,
+        pub attributes: HashMap<String, String>,
+        pub children: Vec<Node>
+    }
+\end{minted} \\
+
+
+Kemudian struktur berikut ini yang akan menjadi basis dari proses \textit{parsing} CSS Selector, struktur tersebut dibuat berdasarkan spesifikasi tipe-tipe selektor CSS,
+\begin{minted}{rust}
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub enum Combinator {
+        Descendant,
+        Child,
+        DirectNextSibling,
+        NextSibling,
+    }
+    
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    pub enum Namespace {
+        Default,
+        Any,
+        None,
+        Named(String),
+    }
+    
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct AttributeFilter {
+        pub namespace: Namespace,
+        pub name: String,
+        pub operator: Option<String>,
+        pub value: Option<String>,
+        pub modifier: Option<char>,
+    }
+    
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct PseudoFilter {
+        pub name: String,
+        pub args: Option<String>,
+    }
+    
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct SelectorUnit {
+        pub namespace: Namespace,
+        pub tag: Option<String>,
+        pub ids: Option<Vec<String>>,
+        pub classes: Option<Vec<String>>,
+        pub attributes: Option<Vec<AttributeFilter>>,
+        pub pseudos: Option<Vec<PseudoFilter>>,
+    }
+    
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct NodeFilter {
+        pub prev_combinator: Option<Combinator>,
+        pub selector: SelectorUnit,
+    }
+    
+    #[derive(Clone)]
+    struct CssLexerWrapper<'a> {
+        tokenizer: CssLexer<'a>,
+        current_token: CssToken,
+        current_text: &'a str,
+        current_start_pos: usize,
+    }
+    
+    #[derive(Clone)]
+    pub struct CssSelectorParser<'a> {
+        css_lexer: CssLexerWrapper<'a>,
+        is_relative_selector: bool,
+        error_message: String,
+        pub traversal: CssSelectorTraversal,
+    }
+\end{minted} \\
+
+
+Lalu struktur yang mendeskripsikan perintah untuk dijalankan oleh thread turunan yaitu,
+\begin{minted}{rust}
+    #[derive(Debug, Clone)]
+    pub struct ThreadTask {
+        pub curr_node           : Arc<Element>,
+        pub node_child_pos      : usize,
+        pub parent_node         : Arc<Element>,
+        pub selector_list_idx   : usize,
+        pub selector_unit_idx   : usize,
+        pub depth               : usize
+    }
+\end{minted} \\
+
+
+Struktur tersebut dapat digunakan pada variasi struktur data global \textit{thread safe} berikut,
+\begin{minted}{rust}
+    #[derive(Debug, Clone)]
+    pub struct AsyncVec<T> {
+        pub data: Arc<Mutex<Vec<T>>>,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct AsyncHashSet<T> {
+        pub data: Arc<Mutex<HashSet<T>>>,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct AsyncStack<T> {
+        pub data: Arc<Mutex<VecDeque<T>>>,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct AsyncQueue<T> {
+        pub data: Arc<Mutex<VecDeque<T>>>,
+    }
+\end{minted} \\
+
+
+Terakhir terdapat struktur berikut yang menjadi hasil dari \textit{pre-processing} teknik \textit{binary lifting}. 
+Struktur tersebut berisi tabel prekomputasi \textit{ancestor} dan juga HashTable untuk pemetaan sesuai yang dijelaskan pada \ref{section-lca-design},
+\begin{minted}{rust}
+    pub struct BinaryLiftMetadata {
+        ancestors               : Vec<Vec<usize>>,
+        max_precompute_height   : usize,
+        depth_map               : Vec<usize>, 
+        id_to_node_map          : Vec<Node>,
+        node_to_id_map          : HashMap<usize, usize>
+    }
+\end{minted} \\
+
+
+Dengan setiap struktur tersebut, diimplementasikan logika utama yang dibutuhkan untuk melakukan
+traversal DFS dan BFS secara parallel, dan LCA secara non-parallel,
+\begin{minted}{rust}
+    pub fn async_bfs(html_text: &str, css_query: &str, thread_num: usize) 
+        -> Option<Vec<Arc<Element>>>;
+
+    pub fn async_dfs(html_text: &str, css_query: &str, thread_num: usize) 
+        -> Option<Vec<Arc<Element>>>;
+
+    pub fn preprocess_tree(root: &Node) -> BinaryLiftMetadata;
+
+    pub fn find_lca(node1: &Node, node2: &Node, metadata: &BinaryLiftMetadata) -> Node;
+\end{minted}
+
+
+\subsubsection{Frontend Application}
+
+Implementasi aplikasi frontend dilakukan menggunakan \textit{library} \textbf{Yew}, 
+yang digabungkan dengan \textit{framework} \textbf{Tailwind CSS}. \\
+
+Detail implementasi meliputi beberapa file berikut:
+\begin{itemize}
+    \item \textbf{bindings.rs}, file ini berisi \textit{binding} untuk fungsi terkait Web Assembly.
+    \item \textbf{canvas\_tree.rs}, file ini berisi logika penggambaran DOM Tree dalam antarmuka pengguna.
+    \item \textbf{html\_input.rs}, file ini berisi \textit{handler} masukan HTML, baik melalui file ataupun scraping.
+    \item \textbf{left\_section.rs}, file ini berisi \textit{handler} untuk bagian panel antarmuka di bagian kiri.
+    \item \textbf{right\_section.rs}, file ini berisi \textit{handler} untuk bagian panel antarmuka di bagian kanan.
+    \item \textbf{js\_util.rs}, file ini berisi fungsi JavaScript pembantu tampilan.
+    \item \textbf{result\_player.rs}, file ini berisi logika penayangan animasi yang berkaitan dengan traversal.
+    \item \textbf{main.rs}, file ini berisi pemanggilan fungsi utama dari \textit{framework frontend} \textbf{Yew}.
+\end{itemize} \\
+
+Aplikasi frontend akan mengirim input melalui HTTP Request ke server, kemudian server akan memproses request tersebut.
+Jika server menerima parameter URL maka akan dianggap sebagai perintah untuk melakukan \textit{web scraping}. \\
+
+\begin{minted}{rust}
+    #[derive(Serialize)]
+    struct QueryPostBody {
+        input_type: String,
+        css_query: String,
+        file_payload: String,
+        url_payload: String,
+        text_payload: String,
+        use_dfs: bool,
+    }
+\end{minted} \\
+
+Kemudian hasil dari \textit{web scraping} akan dikirim ke \textit{handler} CSS Selector, dan dilanjutkan ke traversal utama.
+Hasil dari traversal tersebut disimpan dalam sebuah struktur yang menyimpan setiap paths sebagai path dari akar lokal ke setiap simpul yg ditemukan, \\
+
+\begin{minted}{rust}
+    #[derive(Clone, PartialEq)]
+    pub struct ResultItem {
+        pub query: String,
+        pub paths: Vec<Vec<u32>>,
+        pub selected: Vec<u32>,
+        pub traversal_path: Vec<u32>,
+    }
+\end{minted} \\
+
+Atribut \textit{selected} memiliki arti index simpul yg ditemukan,
+dan \textit{traversal path} adalah gabungan dari semua path yg dilalui pada suatu step dimana 
+ketika ada index simpul yang sama artinya terjadi \textit{backtracking}. \\
+
+\subsubsection{Deployment}
+
+
 
 \subsection{Pengujian}
 
 \pagebreak
 
 
+
 \section{Kesimpulan dan Saran}
 
 \subsection{Kesimpulan}
+Sangat banyak permasalahan nyata yang dapat dimodelkan melalui graf. 
+Sehingga algoritma graf sangat berguna untuk pemecahan masalah secara umum, terutama algoritma sederhana seperti traversal melalui DFS/BFS. \\
+
+Terlihat bahwa permasalahan mencocokkan CSS Selector pada HTML DOM Tree yang merupakan tugas kompleks bagi Web Browser moderen
+dapat dimodelkan dengan graf khsusu berbentuk tree, dan dapat diselesaikan melalui BFS/DFS. 
 
 \subsection{Saran}
+Permasalahan terkait Web Browser moderen seharusnya lebih digali dan dikembangkan lagi dalam ilmu keinformatikaan,
+hal ini karena hampir semua teknologi komputasi sudah berhubungan langsung dengan Web,
+dan juga berbagai sub-permasalahan dalam pembuatan Web Browser sangat berguna untuk melatih ilmu informatika.
+
+
+\pagebreak
+
+
+\section*{Pernyataan Orisinilitas}
+Tugas ini disusun sepenuhnya tanpa bantuan kecerdasan buatan (\textit{Generative AI}), melainkan hasil pemikiran dan analisis mandiri.
+
+\begin{flushright}
+    \vspace{0.5cm}
+    \includegraphics[width=3cm]{ttd-fatih.png} \\
+    \rule{5cm}{0.4pt} \\
+    \vspace{0.5cm}
+    Muhammad Fatih Irkham Mauludi (13524004)
+\end{flushright}
+
+\begin{flushright}
+    \vspace{0.5cm}
+    \includegraphics[width=3cm]{ttd-josh.png} \\
+    \rule{5cm}{0.4pt} \\
+    \vspace{0.5cm}
+    Josh Reinhart Zidik (13524048)
+\end{flushright}
+
+\begin{flushright}
+    \vspace{0.5cm}
+    \includegraphics[width=3cm]{ttd-cikang.png} \\
+    \rule{5cm}{0.4pt} \\
+    \vspace{0.5cm}
+    Jingglang Galih Rinenggan (13524095)
+\end{flushright}
+
+\pagebreak
+
+\section*{Lampiran}
+
+Repository Github: \\ \url{https://github.com/FieryBanana101/Tubes2_kata-josh-nama-timnya-jangan-ini} \\
+
+Deployed Web: \\ \url{https:://} \\
+
+\begin{table}[h]
+    \centering
+    \caption{Checklist hasil}
+    \begin{tabular}{|c|p{12cm}|c|c|}
+        \hline
+        \textbf{No} & \textbf{Poin} & \textbf{Ya} & \textbf{Tidak} \\
+        \hline
+        1. & Aplikasi berhasil di kompilasi tanpa kesalahan & \checkmark & &
+        \hline
+        2. & Aplikasi berhasil dijalankan & \checkmark & &
+        \hline
+        3. & Aplikasi dapat menerima input URL web, pilihan algoritma, CSS selector, dan jumlah hasil & \checkmark & &
+        \hline
+        4. & Aplikasi dapat melakukan scraping terhadap web pada input & \checkmark & &
+        \hline
+        5. & Aplikasi dapat menampilkan visualisasi pohon DOM & \checkmark & & 
+        \hline
+        6. & Aplikasi dapat menelusuri pohon DOM dan menampilkan hasil penelusuran & \checkmark & & 
+        \hline
+        7. & Aplikasi dapat menandai jalur tempuh oleh algoritma  &  \checkmark & &
+        \hline
+        8. & Aplikasi dapat menyimpan jalur yang ditempuh algoritma dalam traversal log  &  \checkmark & &
+        \hline
+        9. & [Bonus] Membuat video  &  & \checkmark &
+        \hline
+        10. & [Bonus] Deploy aplikasi  &  \checkmark & &
+        \hline
+        11. & [Bonus] Implementasi animasi pada penelusuran pohon  & \checkmark & &
+        \hline
+        12. & [Bonus] Implementasi multithreading  & \checkmark & &
+        \hline
+        13. &  [Bonus] Implementasi LCA Binary Lifting & \checkmark& &
+        \hline
+    \end{tabular}
+\end{table}
+
+
+\begin{table}[h]
+    \centering
+    \caption{Pembagian Tugas Kelompok}
+    \begin{tabular}{|c|p{5cm}|p{5cm}|c|}
+        \hline
+        \textbf{No} & \textbf{Anggota} & \textbf{Detail Tugas} & \textbf{Presentase Keseluruhan} \\
+        \hline
+        1. & Muhammad Fatih Irkham Mauludi (13524004) & Keseluruhan CSS Selector Parser, DFS + BFS dengan \textit{multi-threading}, LCA + Binary Lifting, testing keseluruhan, dan pembuatan keseluruhan laporan & 33.3333\% & 
+        \hline
+        2. & Josh Reinhart Zidik (13524048) & Keseluruhan HTML Parser, testing keseluruhan & 33.3333\% & 
+        \hline
+        3. & Jingglang Galih Rinenggan (13524095) & Keseluruhan aplikasi frontend, animasi, web scraping, deployment, testing keseluruhan & 33.3333\% &
+        \hline
+    \end{tabular}
+\end{table}
+
 
 \pagebreak
 
@@ -129,121 +1425,100 @@
 
 \begin{thebibliography}{}
 
-\bibitem{munir-graph-1}
-Rinaldi Munir (2026), \texit{Breadth/Depth First Search (BFS/DFS) (Bagian 1)}, https://informatika.stei.itb.ac.id/~rinaldi.munir/Stmik/2025-2026/13-BFS-DFS-(2026)-Bagian1.pdf
+\bibitem{stima-graph-1}
+Munir, Rinaldi. "Breadth/Depth First Search (BFS/DFS) (Bagian 1)}" Strategi Algoritma, STEI-ITB, 2026, 
+\url{https://informatika.stei.itb.ac.id/~rinaldi.munir/Stmik/2025-2026/13-BFS-DFS-(2026)-Bagian1.pdf}. Accessed 18 April 2026. \\
 
-\bibitem{munir-graph-2}
-Rinaldi Munir (2026), \texit{Breadth/Depth First Search (BFS/DFS) (Bagian 2)}, https://informatika.stei.itb.ac.id/~rinaldi.munir/Stmik/2025-2026/14-BFS-DFS-(2026)-Bagian2.pdf
+
+\bibitem{stima-graph-2}
+Munir, Rinaldi. "Breadth/Depth First Search (BFS/DFS) (Bagian 2)}" Strategi Algoritma, STEI-ITB, 2026, 
+\url{https://informatika.stei.itb.ac.id/~rinaldi.munir/Stmik/2025-2026/14-BFS-DFS-(2026)-Bagian2.pdf}. Accessed 18 April 2026. \\
+
+
+\bibitem{cp-dfs}
+jakobkogler, paramsingh, et al. "Depth First Search" Algorithms for Competitive Programming, cp-algorithms, 2025,
+\url{https://cp-algorithms.com/graph/depth-first-search.html}. Accessed 20 April 2026. \\
+
+\bibitem{cp-bfs}
+jakobkogler, paramsingh, et al. "Breadth-first search" Algorithms for Competitive Programming, cp-algorithms, 2024,
+\url{https://cp-algorithms.com/graph/breadth-first-search.html}. Accessed 20 April 2026. \\
+
+
+\bibitem{cp-lca}
+jakobkogler, pin3da, et al. "Lowest Common Ancestor" Algorithms for Competitive Programming, cp-algorithms, 2025,
+\url{https://cp-algorithms.com/graph/lca.html}. Accessed 20 April 2026. \\
+
+
+\bibitem{cp-rmq}
+jakobkogler, mhayter, adamant-pwn. "Solve RMQ (Range Minimum Query) by finding LCA (Lowest Common Ancestor)" Algorithms for Competitive Programming, cp-algorithms, 2025,
+\url{https://cp-algorithms.com/graph/rmq_linear.html}. Accessed 20 April 2026. \\
+
+
+\bibitem{cp-binlift}
+jakobkogler, adamant-pwn, et al. "Lowest Common Ancestor - Binary Lifting" Algorithms for Competitive Programming, cp-algorithms, 2026,
+\url{https://cp-algorithms.com/graph/lca_binary_lifting.html}. Accessed 20 April 2026. \\
+
+
+\bibitem{cp-cses-book}
+Laaksonen, Antti. "Competitive Programmer’s Handbook", cses.fi, 2018,
+\url{https://cses.fi/book/book.pdf} Accessed 20 April 2026. \\
+
+
+\bibitem{mozilla-html}
+MDN contributors. "HTML: HyperText Markup Language" HTML, Mozilla.org, 2025,
+\url{https://developer.mozilla.org/en-US/docs/Web/HTML}. Accessed 25 April 2026. \\
+
+
+\bibitem{mozilla-dom}
+MDN contributors. "Document Object Model" HTML, Mozilla.org, 2026,
+\url{https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model}. Accessed 25 April 2026. \\
+
+
+\bibitem{html-spec}
+HTML WG. "Parsing HTML Documents" HTML5, W3C.org, 2011,
+\url{https://www.w3.org/TR/2011/WD-html5-20110113/parsing.html}. Accessed 25 April 2026. \\
+
+
+\bibitem{mozilla-css}
+MDN contributors. "What is CSS?" Learn Web Development, Mozilla.org, 2025,
+\url{https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Styling_basics/What_is_CSS}. Accessed 25 April 2026. \\
+
+
+\bibitem{mozilla-selector}
+MDN contributors. "CSS selectors" CSS, Mozilla.org, 2026,
+\url{https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Selectors}. Accessed 25 April 2026. \\
+
+
+\bibitem{css-spec}
+CSS WG. "Selectors Level 4" W3C Editor's Draft, W3C.org, 2026,
+\url{https://drafts.csswg.org/selectors-4/}. Accessed 25 April 2026. \\
+
+
+\bibitem{parallel-comp}
+Barney, Blaise. "Introduction to Parallel Computing Tutorial" Tutorials, Livermore Computing, 2021,
+\url{https://hpc.llnl.gov/documentation/tutorials/introduction-parallel-computing-tutorial}. Accessed 21 April 2026. \\
+
+
+\bibitem{os-book}
+Silberschatz, Abraham, Peter B. Galvin, and Greg Gagne. Operating System Concepts. 9th ed., Wiley, 2012.
+
+
+\bibitem{client-server}
+Reese, George. "Chapter 7: Distributed Application Architecture." Database Programming with JDBC & Java, 2nd ed., O'Reilly Media, Inc., 2000,
+\url{https://web.archive.org/web/20110406121920/http://java.sun.com/developer/Books/jdbc/ch07.pdf}. Accessed 21 April 2026. \\
+
+
+\bibitem{docker}
+Nigel, Poulton. "Docker Deep Dive" Leanpub. 2018,
+\url{https://ebooks.karbust.me/Technology/Docker%20Deep%20Dive%20-%20Nigel%20Poulton.pdf}. Accessed 21 April 2026. \\
+
+
+\bibitem{virt-cont}
+Martin, Enrico. "Virtualization and Containerization". 2021, Final Thesis, 2021,
+\url{https://unitesi.unive.it/retrieve/cc1c017f-1a66-443d-b375-a0adc1e0fba1/815635-84509.pdf}. Accessed 21 April 2026. \\
+
 
 \end{thebibliography}
 
-\pagebreak
-
-
-\section*{Pernyataan Orisinilitas}
-Tugas ini disusun sepenuhnya tanpa bantuan kecerdasan buatan (\textit{Generative AI}), melainkan hasil pemikiran dan analisis mandiri.
-
-\begin{flushright}
-    \vspace{0.5cm}
-    \includegraphics[width=3cm]{image/ttd-fatih.png} \\
-    \rule{5cm}{0.4pt} \\
-    \vspace{0.5cm}
-    Muhammad Fatih Irkham Mauludi (13524004)
-\end{flushright}
-
-\begin{flushright}
-    \vspace{0.5cm}
-    \includegraphics[width=3cm]{image/ttd-josh.png} \\
-    \rule{5cm}{0.4pt} \\
-    \vspace{0.5cm}
-    Josh Reinhart Zidik (13524048)
-\end{flushright}
-
-\begin{flushright}
-    \vspace{0.5cm}
-    \includegraphics[width=3cm]{image/ttd-cikang.png} \\
-    \rule{5cm}{0.4pt} \\
-    \vspace{0.5cm}
-    Jingglang Galih Rinenggan (13524095)
-\end{flushright}
-
-\pagebreak
-
-\section*{Lampiran}
-
-\begin{itemize}
-
-\item Repository Github: \\ \url{https://github.com/FieryBanana101/Tubes2_kata-josh-nama-timnya-jangan-ini} 
-
-\end{itemize}
-
-\begin{table}[h]
-    \centering
-    \caption{Checklist hasil}
-    \begin{tabular}{|c|p{12cm}|c|c|}
-        \hline
-        \textbf{No} & \textbf{Poin} & \textbf{Ya} & \textbf{Tidak} \\
-        \hline
-        1. & Aplikasi berhasil di kompilasi tanpa kesalahan & & &
-        \hline
-        2. & Aplikasi berhasil dijalankan &  & &
-        \hline
-        3. & Aplikasi dapat menerima input URL web, pilihan algoritma, CSS selector, dan jumlah hasil & & &
-        \hline
-        4. & Aplikasi dapat melakukan scraping terhadap web pada input  & & &
-        \hline
-        5. & Aplikasi dapat menampilkan visualisasi pohon DOM & & & 
-        \hline
-        6. & Aplikasi dapat menelusuri pohon DOM dan menampilkan hasil penelusuran & & & 
-        \hline
-        7. & Aplikasi dapat menandai jalur tempuh oleh algoritma  &  & &
-        \hline
-        8. & Aplikasi dapat menyimpan jalur yang ditempuh algoritma dalam traversal log  &  & &
-        \hline
-        9. & [Bonus] Membuat video  &  & &
-        \hline
-        10. & [Bonus] Deploy aplikasi  &  & &
-        \hline
-        11. & [Bonus] Implementasi animasi pada penelusuran pohon  &  & &
-        \hline
-        12. & [Bonus] Implementasi multithreading  &  & &
-        \hline
-        13. &  [Bonus] Implementasi LCA Binary Lifting &  & &
-        \hline
-    \end{tabular}
-\end{table}
-
-
-\begin{table}[h]
-    \centering
-    \caption{Pembagian Tugas Kelompok}
-    \begin{tabular}{|c|p{5cm}|c|c|}
-        \hline
-        \textbf{No} & \textbf{Anggota} & \textbf{Detail Tugas} & \textbf{Presentase Keseluruhan} \\
-        \hline
-        1. & Muhammad Fatih Irkham Mauludi (13524004) & & &
-        \hline
-        2. & Josh Reinhart Zidik (13524048) & & &
-        \hline
-        3. & Jingglang Galih Rinenggan (13524095) & & &
-        \hline
-    \end{tabular}
-\end{table}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-\pagebreak
 
 \end{document}
