@@ -170,7 +170,9 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
                         children: Vec::new() 
                     };
                     for (key, value) in tag.attributes.iter() {
-                        new_node.attributes.insert(htmlstring_to_string(key), htmlstring_to_string(value));
+                        if !new_node.attributes.contains_key(key) {
+                            new_node.attributes.insert(htmlstring_to_string(key), htmlstring_to_string(value));
+                        }
                     }
                     
                     if let Some(parent) = stack.last_mut(){
@@ -187,7 +189,9 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
                         children: Vec::new() 
                     };
                     for (key, value) in tag.attributes.iter() {
-                        new_node.attributes.insert(htmlstring_to_string(key), htmlstring_to_string(value));
+                        if !new_node.attributes.contains_key(key) {
+                            new_node.attributes.insert(htmlstring_to_string(key), htmlstring_to_string(value));
+                        }
                     }
                     stack.push(new_node);
 
