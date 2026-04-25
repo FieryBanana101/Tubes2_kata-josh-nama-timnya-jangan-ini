@@ -678,9 +678,125 @@ Untuk lebih jelasnya, LCA menggunakan Binary Lifting dapat dipaparkan melalui \t
 \end{algorithm} \\
 
 
-\subsection{HTML DOM Tree}
+\subsection{HTML dan DOM Tree}
+
+HTML (\textit{HyperText Markup Language}) adalah bahasa formal bertipe \textit{markup language} yang digunakan untuk mendefinisikan
+arti dan struktur sebuah konten web. HTML biasanya digunakan bersamaan dengan teknologi web lain seperti CSS, JavaScript, WebAssembly, dan lain-lain.
+HTML menggunakan elemen spesial untuk mendeskripsikan konten, elemen tersebut dikatakan sebagai HTML Element \cite{mozilla-html}. \\
+
+Sebuah HTML Element dibedakan dari teks biasa dengan menggunakan \textit{tags}, yaitu nama elemen tersebut yang dikelilingi oleh karakter '<' dan '>'.
+Nama dari HTML Element bersifat \textit{case-insensitive}. Sebuah dokumen HTML selalu memiliki elemen pertama dengan nama elemen "html".
+Adapun beberapa elemen spesial lainnya yang terdefinisi dalam spesifikasi HTML yaitu \cite{mozilla-html},
+\begin{minted}
+    <head>
+    <title>
+    <body>
+    <p>
+    <div>
+    <footer>
+\end{minted} \\
+
+Terdapat juga bahwa sebuah \textit{tag} dari elemen HTML harus ditutup dengan \textit{tag} dengan nama elemen yang sama,
+tetapi memiliki simbol '/' sebelum simbol '>' penutup. Sehingga kebanyakan elemen HTML dideskripsikan melalui dua buah \textit{tag}, yang terdiri dari \textit{tag} pembuka dan penutup. 
+Tetapi terdapat juga elemen HTML yang bersifat \textit{self-closing}, yaitu hanya terdiri dari sebuah \textit{tag} yang berlaku sebagai pembuka dan penutup secara bersamaan \cite{mozilla-html}. \\
+
+Selain itu, sebuah elemen HTML tidak hanya memiliki nama saja, tetapi dapat juga memiliki atribut-atribut tambahan.
+Atribut-atribut tersebut dapat dideskripsikan sebagai kumpulan pasangan nama atribut beserta nilai atribut yang dipisahkan oleh simbol '=',
+kemudian antara atribut yang berbeda dipisahkan oleh karakter \textit{whitespaces}. Atribut juga bisa saja tidak memiliki nilai sehingga hanya memiliki nama atribut saja \cite{mozilla-html}. \\
+
+
+Semua atribut suatu elemen harus tertampung pada \textit{tag} pembuka (atau pembuka-penutup pada \textit{self-closing tag}), atau dalam kata lain harus muncul setelah nama \textit{tag} dan sebelum karakter penutup '>'.
+Jika terdapat lebih dari satu nama atribut yang sama, maka nilai atribut yang pertama muncul-lah yang akan diasosiaskan dengan nama atribut tersebut.
+Adapun contoh-contoh \textit{tag} yang mendeksripsikan elemen HTML diantaranya \cite{mozilla-html}:
+\begin{minted}{html}
+    <head> </head>
+    <p> Hello World! </p>
+    <div level="1"> <div level="2"> </div> </div>
+    <input type="radio" id="input-1" name="choices" checked />
+\end{minted} //
+
+
+Dokumen HTML yang mendeskripsikan konten web dapat dikonversi menjadi sebuah DOM (\textit{Document Object Model}),
+DOM tersebut merepresentasikan konten pada dokumen dalam bentuk struktur data tree, dimana setiap simpul adalah elemen HTML.
+Metode ini memungkinkan konten web untuk diakses dan dimodifikasi secara programmatik, modular dan memiliki skalabilitas tinggi \cite{mozilla-dom}. \\
+
+Sebagai contoh, perhatikan dokumen HTML berikut ini:
+\begin{minted}{html}
+    <html lang="en">
+        <head>
+            <title>My Document</title>
+        </head>
+        <body>
+            <h1>Header</h1>
+            <p>Paragraph</p>
+        </body>
+    </html>
+\end{minted} \\
+
+Dokumen tersebut dapat digambarkan sebagai DOM Tree berbentuk berikut ini \cite{mozilla-dom},
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=8cm, height=5cm]{section2-dom-tree.png}
+    \caption{Ilustrasi contoh DOM Tree HTML}
+    \label{fig:section2-dom-tree}
+\end{figure} \\
+
+
+Adapun untuk mengubah dokumen HTML menjadi sebuah DOM Tree diperlukan tahapan-tahapan berikut \cite{html-spec},
+\begin{enumerate}
+    \item Melakukan dekodifikasi \texit{byte} yang datang dari sumber pengirim dokumen.
+    \item Melakukan \textit{pre-processing} pada masukan yang datang, dengan cara menentukan \textit{encoding}, menghilangkan karakter terntentu, ataupun menentukan validitas berdasarkan karakterk kontrol tertentu.
+    \item Melakukan tokenisasi menjadi 69 token yang terdefinisi
+    \item Membentuk DOM Tree sesuai token yang ada dengan menggunakan struktur data \textit{stack}
+    \item Melakukan eksekusi \textit{script} pada dokumen jika ada, dan merubah bentuk DOM Tree sesuai \textit{script} yang terdefinisi
+\end{enumerate} \\
 
 \subsection{CSS Selector}
+
+CSS (\textit{Cascading Style Sheet}) merupakan bahasa formal yang berbasis aturan (\textit{rule-based}).
+CSS dapat digunakan untuk memberikan \textit{style} pada sebuah dokumen HTML, dimana \textit{style} tersebut dapat diinterpretasikan oleh sebuah \textit{web browser}.
+Bahasa CSS diorganisasikan menjadi beberapa modul fungsionalitas, misalnya modul \textit{styling} teks, latar belakang, animasi, tabel, dan lain-lain \cite{mozilla-css}. \\
+
+Dalam mendeskripsikan aturan pemberian \textit{style} pada sebuah dokumen HTML, CSS memanfaatkan struktur HTML yang dapat dibuat menjadi sebuah \textit{tree}, lebih tepatnya DOM Tree.
+Umumnya CSS digunakan dengan memberikan spesifikasi terhadap aturan \textit{styling} tertentu untuk himpunan simpul DOM Tree tertentu.
+Untuk menyatakan himpunan simpul tersebut digunakan CSS Selector, kemudian himpunan tersebut akan diberikan beberapa CSS Rule yang berbentuk deklarasi himpunan \textit{property} dan \textit{value}. \cite{mozilla-css} \\
+
+CSS Selector adalah salah satu modul fungsionalitas CSS yang memiliki fungsi \textit{pattern-matching} untuk memberikan spesifikasi himpunan simpul DOM Tree yang dipilih.
+Ada banyak sekali komponen dari modul CSS Selector, tipe-tipe komponen selector umumnya dapat kita kategorikan menjadi \cite{mozilla-selector},
+\begin{enumerate}
+    \item \textbf{Basic Selector}
+    \begin{itemize}
+        \item \textbf{Type Selector}, memilih simpul berdasarkan nama dari \textit{tag} HTML.
+        \item \textbf{Universal Selector (*)}, memilih simpul apa saja dari DOM Tree.
+        \item \textbf{Class Selector (.)}, memilih simpul berdasarkan kelas elemen tertentu.
+        \item \textbf{ID Selector (#)}, memilih simpul berdasarkan ID unik elemen tertentu.
+    \end{itemize}
+    \item \textbf{Attribute Selector ([])}, selektor yang mencocokkan nilai atribut dari sebuah \textit{tag} HTML dengan berbagai variasi tertentu, misalnya \textit{substring matching}, \textit{prefix matching}, \textit{suffix matching}, dan lain-lain.
+    \item \textbf{Pseudo-Class Selector (:)}, selektor yang mencocokkan simpul DOM Tree menggunakan informasi yang tidak terdapat langsung pada tree tersebut, misalnya mencocokkan elemen berdasarkan interaksi \textit{mouse} atau \textit{keyboard} pengguna.
+    \item \textbf{Pseudo-Element Selector (::)}, selektor yang mencocokkan simpul sehingga aturan \textit{styling} dapat diberikan pada bagian tertentu elemen secara parsial, misalnya mencocokkan elemen sehingga baris pertama paragraf tertentu dapat memiliki \textit{style}.
+    \item \textbf{Compund Selector}, gabungan beberapa selektor dasar menjadi rantai selektor yang lebih panjang, selektor dasar tersebut dapat memiliki Attribute Selector, Pseudo-Class Selector, ataupun Pseudo-Element Selector.
+    \item \textbf{Combinator}, merupakan operator penggabungan beberapa Compound Selector.
+    \begin{itemize}
+        \item \textbf{Descendant ( )}, menyatakan operator yang mencocokkan elemen di kanan sebagai keturunan dari elemen di kiri operator.
+        \item \textbf{Child (>)}, menyatakan operator yang mencocokkan elemen di kanan sebagai anak langsung dari elemen di kiri operator.
+        \item \textbf{Subsequent-Sibling (~)}, menyatakan operator yang mencocokkan elemen di kanan sebagai elemen yang memiliki \textit{parent} yang sama dengan elemen di kiri dan terletak setelahnya dalam urutan \textit{pre-order traversal}.
+        \item \textbf{Next-Sibling (+)}, menyatakan operator yang mencocokkan elemen di kanan sebagai elemen pertama yang dikunjungi melalui \textit{parent} kedua elemen tersebut dalam urutan \textit{pre-order traversal}.
+        \item \textbf{Column (||)}, menyatakan operator yang mencocokkan simpul yang berada pada sebuah kolom tabel atau grid.
+    \end{itemize}
+    \item \textbf{Complex Selector}, merupakan gabungan beberapa Compound Selector yang digabungkan menggunakan Combinator sehingga menjadi rantai yang lebih kompleks.
+    \item \textbf{Selector List}, merupakan gabungan beberapa Complex Selector yang digabungkan menggunakan koma (',').
+    \item \textbf{Namespace Separator ('|')}, merupakan operator khusus yang membatasi pencocokan selektor lainnya berdasarkan \textit{namespace} HTML tertentu, misalnya \textit{namespace} SVG dan MathML.
+\end{enumerate} \\
+
+
+Dokumen HTML yang dipadukan dengan CSS akan diinterpretasikan dengan langkah-langkah sebagi berikut \cite{mozilla-css},
+\begin{enumerate}
+    \item Browser memuat dokumen HTML dan membangun sebuah DOM Tree.
+    \item Jika terdapat aturan CSS, maka browser melakukan pencocokkan CSS Selector, dengan tahapan tokenisasi, pembentukan struktur selektor, dan pencocokan dengan \textit{tree traversal}.
+    \item Semua aturan CSS yang ditemukan akan dicocokkan berdasarkan CSS Selector yang sesuai.
+    \item Aturan CSS akan diaplikasikan ke DOM Tree sehingga terbentuk Render Tree, yang akan digunakan Rendering Engine untuk membuat tampilan GUI.
+\end{enumerate} \\
+
 
 
 \subsection{Client-Server Architecture}
@@ -861,46 +977,98 @@ dan lain sebagainya. \\
 \begin{thebibliography}{}
 
 \bibitem{stima-graph-1}
-Rinaldi Munir (2026), \textit{Breadth/Depth First Search (BFS/DFS) (Bagian 1)}, \url{https://informatika.stei.itb.ac.id/~rinaldi.munir/Stmik/2025-2026/13-BFS-DFS-(2026)-Bagian1.pdf}
+Munir, Rinaldi. "Breadth/Depth First Search (BFS/DFS) (Bagian 1)}" Strategi Algoritma, STEI-ITB, 2026, 
+\url{https://informatika.stei.itb.ac.id/~rinaldi.munir/Stmik/2025-2026/13-BFS-DFS-(2026)-Bagian1.pdf}. Accessed 18 April 2026. \\
+
 
 \bibitem{stima-graph-2}
-Rinaldi Munir (2026), \textit{Breadth/Depth First Search (BFS/DFS) (Bagian 2)}, \url{https://informatika.stei.itb.ac.id/~rinaldi.munir/Stmik/2025-2026/14-BFS-DFS-(2026)-Bagian2.pdf}
+Munir, Rinaldi. "Breadth/Depth First Search (BFS/DFS) (Bagian 2)}" Strategi Algoritma, STEI-ITB, 2026, 
+\url{https://informatika.stei.itb.ac.id/~rinaldi.munir/Stmik/2025-2026/14-BFS-DFS-(2026)-Bagian2.pdf}. Accessed 18 April 2026. \\
+
 
 \bibitem{cp-dfs}
-\url{https://cp-algorithms.com/graph/depth-first-search.html}
+jakobkogler, paramsingh, et al. "Depth First Search" Algorithms for Competitive Programming, cp-algorithms, 2025,
+\url{https://cp-algorithms.com/graph/depth-first-search.html}. Accessed 20 April 2026. \\
 
 \bibitem{cp-bfs}
-\url{https://cp-algorithms.com/graph/breadth-first-search.html}
+jakobkogler, paramsingh, et al. "Breadth-first search" Algorithms for Competitive Programming, cp-algorithms, 2024,
+\url{https://cp-algorithms.com/graph/breadth-first-search.html}. Accessed 20 April 2026. \\
+
 
 \bibitem{cp-lca}
-\url{https://cp-algorithms.com/graph/lca.html}
+jakobkogler, pin3da, et al. "Lowest Common Ancestor" Algorithms for Competitive Programming, cp-algorithms, 2025,
+\url{https://cp-algorithms.com/graph/lca.html}. Accessed 20 April 2026. \\
+
 
 \bibitem{cp-rmq}
-\url{https://cp-algorithms.com/graph/rmq_linear.html}
+jakobkogler, mhayter, adamant-pwn. "Solve RMQ (Range Minimum Query) by finding LCA (Lowest Common Ancestor)" Algorithms for Competitive Programming, cp-algorithms, 2025,
+\url{https://cp-algorithms.com/graph/rmq_linear.html}. Accessed 20 April 2026. \\
+
 
 \bibitem{cp-binlift}
-\url{https://cp-algorithms.com/graph/lca_binary_lifting.html}
+jakobkogler, adamant-pwn, et al. "Lowest Common Ancestor - Binary Lifting" Algorithms for Competitive Programming, cp-algorithms, 2026,
+\url{https://cp-algorithms.com/graph/lca_binary_lifting.html}. Accessed 20 April 2026. \\
+
 
 \bibitem{cp-cses-book}
-\url{https://cses.fi/book/book.pdf}
+Laaksonen, Antti. "Competitive Programmer’s Handbook", cses.fi, 2018,
+\url{https://cses.fi/book/book.pdf} Accessed 20 April 2026. \\
+
+
+\bibitem{mozilla-html}
+MDN contributors. "HTML: HyperText Markup Language" HTML, Mozilla.org, 2025,
+\url{https://developer.mozilla.org/en-US/docs/Web/HTML}. Accessed 25 April 2026. \\
+
+
+\bibitem{mozilla-dom}
+MDN contributors. "Document Object Model" HTML, Mozilla.org, 2026,
+\url{https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model}. Accessed 25 April 2026. \\
+
+
+\bibitem{html-spec}
+HTML WG. "Parsing HTML Documents" HTML5, W3C.org, 2011,
+\url{https://www.w3.org/TR/2011/WD-html5-20110113/parsing.html}. Accessed 25 April 2026. \\
+
+
+\bibitem{mozilla-css}
+MDN contributors. "What is CSS?" Learn Web Development, Mozilla.org, 2025,
+\url{https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Styling_basics/What_is_CSS}. Accessed 25 April 2026. \\
+
+
+\bibitem{mozilla-selector}
+MDN contributors. "CSS selectors" CSS, Mozilla.org, 2026,
+\url{https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Selectors}. Accessed 25 April 2026. \\
+
+
+\bibitem{css-spec}
+CSS WG. "Selectors Level 4" W3C Editor's Draft, W3C.org, 2026,
+\url{https://drafts.csswg.org/selectors-4/}. Accessed 25 April 2026. \\
+
 
 \bibitem{parallel-comp}
-\url{https://hpc.llnl.gov/documentation/tutorials/introduction-parallel-computing-tutorial}
+Barney, Blaise. "Introduction to Parallel Computing Tutorial" Tutorials, Livermore Computing, 2021,
+\url{https://hpc.llnl.gov/documentation/tutorials/introduction-parallel-computing-tutorial}. Accessed 21 April 2026. \\
+
 
 \bibitem{os-book}
 the os book from univ
 
+
 \bibitem{client-server}
-\url{https://web.archive.org/web/20110406121920/http://java.sun.com/developer/Books/jdbc/ch07.pdf}
+Reese, George. "Chapter 7: Distributed Application Architecture." Database Programming with JDBC & Java, 2nd ed., O'Reilly Media, Inc., 2000,
+\url{https://web.archive.org/web/20110406121920/http://java.sun.com/developer/Books/jdbc/ch07.pdf}. Accessed 21 April 2026. \\
+
 
 \bibitem{docker}
-\url{https://ebooks.karbust.me/Technology/Docker%20Deep%20Dive%20-%20Nigel%20Poulton.pdf}
+Nigel, Poulton. "Docker Deep Dive" Leanpub. 2018,
+\url{https://ebooks.karbust.me/Technology/Docker%20Deep%20Dive%20-%20Nigel%20Poulton.pdf}. Accessed 21 April 2026. \\
+
 
 \bibitem{virt-cont}
-\url{https://unitesi.unive.it/retrieve/cc1c017f-1a66-443d-b375-a0adc1e0fba1/815635-84509.pdf}
+Martin, Enrico. "Virtualization and Containerization". 2021, Final Thesis, 2021,
+\url{https://unitesi.unive.it/retrieve/cc1c017f-1a66-443d-b375-a0adc1e0fba1/815635-84509.pdf}. Accessed 21 April 2026. \\
 
 
-% TODO: fix URL bibliography format later
 
 
 \end{thebibliography}
@@ -939,11 +1107,7 @@ Tugas ini disusun sepenuhnya tanpa bantuan kecerdasan buatan (\textit{Generative
 
 \section*{Lampiran}
 
-\begin{itemize}
-
-\item Repository Github: \\ \url{https://github.com/FieryBanana101/Tubes2_kata-josh-nama-timnya-jangan-ini} 
-
-\end{itemize}
+Repository Github: \\ \url{https://github.com/FieryBanana101/Tubes2_kata-josh-nama-timnya-jangan-ini} 
 
 \begin{table}[h]
     \centering
