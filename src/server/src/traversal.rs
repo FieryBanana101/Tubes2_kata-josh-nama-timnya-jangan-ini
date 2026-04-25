@@ -17,7 +17,8 @@ fn push_all_children<T: AsyncTraversalTracker<ThreadTask>>(
     task_tracker: &Arc<T>,
     curr_node: &Arc<Element>, 
     curr_depth: usize, 
-    filter_idx: usize, 
+    selector_list_idx: usize,
+    selector_unit_idx:usize, 
     add_prev_filter: bool
 ){
 
@@ -29,7 +30,8 @@ fn push_all_children<T: AsyncTraversalTracker<ThreadTask>>(
                 curr_node: child.clone(),
                 node_child_pos: idx,
                 parent_node: curr_node.clone(),
-                curr_filter_idx: filter_idx,
+                selector_list_idx: selector_list_idx,
+                selector_unit_idx: selector_unit_idx,
                 depth: curr_depth + 1
             });
 
@@ -38,7 +40,8 @@ fn push_all_children<T: AsyncTraversalTracker<ThreadTask>>(
                     curr_node: child.clone(),
                     node_child_pos: idx,
                     parent_node: curr_node.clone(),
-                    curr_filter_idx: filter_idx - 1,
+                    selector_list_idx: selector_list_idx,
+                    selector_unit_idx: selector_unit_idx - 1,
                     depth: curr_depth + 1
                 });
             }
@@ -62,7 +65,8 @@ fn push_next_sibling<T: AsyncTraversalTracker<ThreadTask>>(
     parent_node: &Arc<Element>, 
     curr_child_idx: usize, 
     curr_depth: usize, 
-    filter_idx: usize, 
+    selector_list_idx: usize,
+    selector_unit_idx: usize, 
     add_prev_filter: bool
 ){
 
@@ -75,7 +79,8 @@ fn push_next_sibling<T: AsyncTraversalTracker<ThreadTask>>(
             curr_node: pushed_node.clone(),
             node_child_pos: curr_child_idx + 1,
             parent_node: parent_node.clone(),
-            curr_filter_idx: filter_idx,
+            selector_list_idx: selector_list_idx,
+            selector_unit_idx: selector_unit_idx,
             depth: curr_depth
         });
 
@@ -84,7 +89,8 @@ fn push_next_sibling<T: AsyncTraversalTracker<ThreadTask>>(
                 curr_node: pushed_node.clone(),
                 node_child_pos: curr_child_idx + 1,
                 parent_node: parent_node.clone(),
-                curr_filter_idx: filter_idx,
+                selector_list_idx: selector_list_idx,
+                selector_unit_idx: selector_unit_idx,
                 depth: curr_depth
             });
         }
@@ -113,8 +119,16 @@ pub fn async_traversal_base(
 
 
     /* Parse and prepare the css selector list */
-    let css_filters: Vec<NodeFilter> = CssSelectorParser::new(css_query, false).parse_all();
-    let async_filters: Arc<Vec<NodeFilter>>  = Arc::new(css_filters);
+    let mut css_filters: Vec<Vec<NodeFilter>> = Vec::new();
+    let complex_selector_list: Vec<&str> = css_query.split(',').collect();
+    for complex_selector in complex_selector_list {
+
+        let css_filter: Vec<NodeFilter> = CssSelectorParser::new(complex_selector, false).parse_all();
+        css_filters.push(css_filter);
+
+    }
+
+    let async_filters: Arc<Vec<Vec<NodeFilter>>>  = Arc::new(css_filters);
 
 
     /* Prepare asyncrhonous global task pool, atomic counter for number of active thread, and thread list */
@@ -123,25 +137,32 @@ pub fn async_traversal_base(
     let async_tracker = Arc::new(async_tracker);
 
 
-    /* Start traversal by pusing the root to the global task pool */
-    async_tracker.push(ThreadTask { 
-        curr_node: Arc::clone(&tree),
-        parent_node: Arc::clone(&tree),
-        node_child_pos: 0,
-        curr_filter_idx: 0,
-        depth: 0,
-    });
+    /* Start traversal by pushing the root for each css selector unit to the global task pool */
+    for (idx, _) in async_filters.iter().enumerate(){
+
+        async_tracker.push(ThreadTask { 
+            curr_node: Arc::clone(&tree),
+            node_child_pos: 0,
+            parent_node: Arc::clone(&tree),
+            selector_list_idx: idx,
+            selector_unit_idx: 0,
+            depth: 0,
+        });
+
+    }
 
 
-    /* Prepare the result vector */
-    let mut result: Arc<AsyncVec<Arc<Element>>> = Arc::new(AsyncVec::<Arc<Element>>::new());
+    /* Prepare the result vector and global node id tracker to avoid duplication in result */
+    let result:Arc<AsyncVec<Arc<Element>>>  = Arc::new(AsyncVec::<Arc<Element>>::new());
+    let id_tracker: Arc<AsyncHashSet<usize>> = Arc::new(AsyncHashSet::<usize>::new());
 
     for _thread_id in 0..core_num {
         
         /* Prepare each shared data structure for the threads, including the atomic counter*/
         let shared_task_stracker = Arc::clone(&async_tracker);
         let shared_filters = Arc::clone(&async_filters);
-        let shared_result: Arc<AsyncVec<Arc<Element>>> = Arc::clone(&result);
+        let shared_result = Arc::clone(&result);
+        let shared_dup_tracker = Arc::clone(&id_tracker);
         let active_threads_count = Arc::clone(&atomic_counter);
 
         let thread = thread::spawn(move || {
@@ -169,42 +190,53 @@ pub fn async_traversal_base(
                     curr_node, 
                     node_child_pos,
                     parent_node, 
-                    curr_filter_idx,
-                    depth 
+                    selector_list_idx,
+                    selector_unit_idx,
+                    depth
                 } = task.unwrap();
 
                 
                 /* Determine whether the current CSS selector and DOM node described by the task match */
-                let curr_filter: &NodeFilter = shared_filters.get(curr_filter_idx).unwrap();
-                let node_match_filter = curr_filter.selector.match_node(&curr_node);
+                let filter_list = shared_filters.get(selector_list_idx).unwrap();
+                let filter = filter_list.get(selector_unit_idx).unwrap();
+
+                let node_match_filter = filter.selector.match_node(&curr_node, node_child_pos, &parent_node);
                 
                 if node_match_filter {
 
                     /* If there are no more selector unit to match from the CSS selector list */
-                    if curr_filter_idx + 1 == shared_filters.len() {
-                        shared_result.push(curr_node.clone());
+                    if selector_unit_idx + 1 == filter_list.len() {
+
+                        /* The current node match the css selector but check the ID tracker to avoid duplicate result */
+                        let curr_node_raw_ptr = Arc::into_raw(curr_node.clone()) as usize;
+                        if shared_dup_tracker.insert(curr_node_raw_ptr) {
+                            shared_result.push(curr_node.clone());
+                        }
 
                         /* 
                             If the last combinator is a '>' or '~', 
                             there are still possible match somewhere after this 
                         */
-                        match curr_filter.prev_combinator {
+                        match filter.prev_combinator {
 
                             None | Some(Combinator::Descendant) => {
                                 push_all_children(
-                                    &shared_task_stracker, 
-                                    &curr_node, depth, 
-                                    curr_filter_idx, 
+                                    &shared_task_stracker,
+                                    &curr_node, 
+                                    depth, 
+                                    selector_list_idx,
+                                    selector_unit_idx, 
                                     false);
                             },
 
                             Some(Combinator::NextSibling) => {
                                 push_next_sibling(
                                     &shared_task_stracker, 
-                                    &parent_node, 
+                                    &parent_node,
                                     node_child_pos, 
                                     depth, 
-                                    curr_filter_idx, 
+                                    selector_list_idx,
+                                    selector_unit_idx, 
                                     false);
                             },
 
@@ -222,33 +254,41 @@ pub fn async_traversal_base(
                         push new task either from the children or the next sibling accordingly,
                         based on the next combinator.
                     */
-                    let next_filter = &shared_filters.get(curr_filter_idx + 1).expect("Invalid css filter index");
+                    let next_filter = filter_list
+                        .get(selector_unit_idx + 1).expect("Inavlid css selector unit index for a filter list");
+
                     let next_combinator = next_filter.prev_combinator.as_ref().expect("Unexpected None value Combinator");
+
                     match next_combinator {
 
-                        Combinator::Child if curr_filter.prev_combinator.as_ref().is_none_or(|val| *val == Combinator::Descendant) => { 
+                        Combinator::Child if filter.prev_combinator.as_ref().is_none_or(|val| *val == Combinator::Descendant) => { 
                             push_all_children(
                                 &shared_task_stracker, 
-                                &curr_node, depth, 
-                                curr_filter_idx + 1, 
+                                &curr_node,
+                                depth, 
+                                selector_list_idx,
+                                selector_unit_idx + 1, 
                                 true);
                         },
 
                         Combinator::Descendant | Combinator::Child => { 
                             push_all_children(
                                 &shared_task_stracker, 
-                                &curr_node, depth, 
-                                curr_filter_idx + 1, 
+                                &curr_node,
+                                depth, 
+                                selector_list_idx,
+                                selector_unit_idx + 1, 
                                 false);
                         }
                         
-                        Combinator::DirectNextSibling if curr_filter.prev_combinator == Some(Combinator::NextSibling) => {
+                        Combinator::DirectNextSibling if filter.prev_combinator == Some(Combinator::NextSibling) => {
                             push_next_sibling(
                                 &shared_task_stracker, 
                                 &parent_node, 
                                 node_child_pos, 
                                 depth, 
-                                curr_filter_idx + 1, 
+                                selector_list_idx,
+                                selector_unit_idx + 1, 
                                 true);
                         },
                         
@@ -258,7 +298,8 @@ pub fn async_traversal_base(
                                 &parent_node, 
                                 node_child_pos, 
                                 depth, 
-                                curr_filter_idx + 1, 
+                                selector_list_idx,
+                                selector_unit_idx + 1, 
                                 false);
                         }
                     };
@@ -271,13 +312,15 @@ pub fn async_traversal_base(
                         propagate the current CSS selector unit to the children or next sibling accordingly.
                         We only consider this when the previous combinator is '>' or '~'.
                     */
-                    match curr_filter.prev_combinator {
+                    match filter.prev_combinator {
                         
                         Some(Combinator::Descendant) | None => {
                             push_all_children(
                                 &shared_task_stracker, 
-                                &curr_node, depth, 
-                                curr_filter_idx, 
+                                &curr_node,
+                                depth, 
+                                selector_list_idx,
+                                selector_unit_idx, 
                                 false);
                         },
 
@@ -288,7 +331,8 @@ pub fn async_traversal_base(
                                 &parent_node, 
                                 node_child_pos, 
                                 depth, 
-                                curr_filter_idx, 
+                                selector_list_idx,
+                                selector_unit_idx, 
                                 false);
                         },
 
@@ -325,6 +369,7 @@ pub fn async_traversal_base(
     This function is only a wrapper for the main traversal function.
 */
 pub fn async_dfs(html_text: &str,  css_query: &str, thread_num: usize) -> Option<Vec<Arc<Element>>> {
+
     let result: AsyncVec<Arc<Element>> = async_traversal_base(
         html_text, 
         css_query, 
@@ -342,9 +387,9 @@ pub fn async_dfs(html_text: &str,  css_query: &str, thread_num: usize) -> Option
     This function is only a wrapper for the main traversal function.
 */
 pub fn async_bfs(html_text: &str,  css_query: &str, thread_num: usize) -> Option<Vec<Arc<Element>>> {
-    let result = async_traversal_base(
+    let result: AsyncVec<Arc<Element>> = async_traversal_base(
         html_text, 
-        css_query, 
+        css_query,
         thread_num, 
         AsyncQueue::<ThreadTask>::new()
     );
@@ -436,6 +481,42 @@ mod tests {
                 </section>
             </main>
 
+            <div id="test-root">
+                <div id="not-empty-whitespace"> </div>
+                <div id="really-empty"></div>
+
+                <nav>
+                    <a href="https://google.com" id="link-1">Link</a>
+                    <a id="not-a-link">Anchor without href</a>
+                </nav>
+
+                <form>
+                    <input type="text" required id="req-input">
+                    <input type="checkbox" id="opt-input">
+                    <textarea readonly id="readonly-text">Can't touch this</textarea>
+                    <div contenteditable id="editable-div">
+                        <p>I am editable</p>
+                        <span contenteditable="false" id="locked-span">I am nested and locked</span>
+                    </div>
+                </form>
+
+                <section id="gauntlet">
+                    <p id="p1">First P</p>
+                    Text Node (Ignored by -of-type)
+                    <div id="d1">First Div</div>
+                    <p id="p2">Second P</p>
+                    <span id="s1">Only Span</span>
+                    <div id="d2">Last Div</div>
+                    <p id="p3">Last P</p>
+                </section>
+
+                <div id="outer-only">
+                    <div id="inner-only">
+                        <p id="lone-p">Lone P</p>
+                    </div>
+                </div>
+            </div>
+
             <footer id="main-footer">
                 <div class="footer-links">
                     <a href="/privacy" class="link">Privacy</a>
@@ -459,6 +540,24 @@ mod tests {
             r##" section.grid-layout div.card.primary.active[class*="row-2"]   "##,
             r##" main#content-area section.deep-nesting-test div.level-1 div.level-2 div.level-3 > div.level-4 article header h3.highlight "##,
             r##"html[   lang    |="en"] body > main#content-area section[   class ^=  "grid"] div[class ~=  "card"][  class *="col-2"   ] + div  ~ div[class$="active"] "##,
+            r##"p, div header, a"##,
+            r##":empty"##,
+            r##":any-link"##,
+            r##":required"##,
+            r##":optional"##,
+            r##":read-write"##,
+            r##":read-only"##,
+            r##"p:first-of-type"##,
+            r##"p:last-of-type"##,
+            r##"section > :last-child"##,
+            r##"span:only-of-type"##,
+            r##"#inner-only:only-child"##,
+            r##"div > p:only-child"##,
+            r##"#not-empty-whitespace:empty"##,
+            r##"#editable-div p:read-write"##,
+            r##"#locked-span:read-only"##,
+            r##"input:required, textarea:read-only"##,
+            r##"div:first-child, div:last-child"##,
         ];
 
 
@@ -466,19 +565,24 @@ mod tests {
             .expect("Failed to get the number of CPU cores before a pure DFS traversal")
             .get();
 
+
         for (idx, selector_query) in testcases.iter().enumerate() {
             eprintln!("\n\n\n##### Traversal Test Case {} #####", idx);
 
             let dfs_result: Vec<Arc<Element>> = async_dfs(&html, &selector_query, core_num)
                 .expect("DFS traversal result is None");
 
-            let bfs_result: Vec<Arc<Element>> = async_dfs(&html, &selector_query, core_num)
+            let bfs_result: Vec<Arc<Element>> = async_bfs(&html, &selector_query, core_num)
                 .expect("BFS traversal result is None");
-
-            dbg!(dfs_result);
-            dbg!(bfs_result);
+            
+            dbg!(selector_query);
+            dbg!(dfs_result); eprintln!("\n");
+            //dbg!(bfs_result);
         }
 
 
     }
 }
+
+
+

@@ -1,5 +1,6 @@
-use std::collections::VecDeque;
+use std::collections::{VecDeque, HashSet};
 use std::fmt::Debug;
+use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 use crate::tokenizer::Element;
 
@@ -9,11 +10,12 @@ use crate::tokenizer::Element;
 */
 #[derive(Debug, Clone)]
 pub struct ThreadTask {
-    pub curr_node       : Arc<Element>,
-    pub node_child_pos   : usize,
-    pub parent_node     : Arc<Element>,
-    pub curr_filter_idx : usize,
-    pub depth           : usize
+    pub curr_node           : Arc<Element>,
+    pub node_child_pos      : usize,
+    pub parent_node         : Arc<Element>,
+    pub selector_list_idx   : usize,
+    pub selector_unit_idx   : usize,
+    pub depth               : usize
 }
 
 
@@ -45,6 +47,35 @@ impl<T> AsyncVec<T> {
     pub fn get_vec(self) -> Option<Vec<T>> {
         let mutex = Arc::into_inner(self.data)?;
         mutex.into_inner().ok()
+    }
+
+}
+
+
+
+/*
+    Thread safe Hash Table for various usage in asyncrhonous traversal
+*/
+#[derive(Debug, Clone)]
+pub struct AsyncHashSet<T> {
+    pub data: Arc<Mutex<HashSet<T>>>,
+}
+
+
+impl<T> AsyncHashSet<T> {
+
+    pub fn new() -> Self {
+        Self {
+            data: Arc::new(Mutex::new(HashSet::new())),
+        }
+    }
+
+
+    pub fn insert(&self, item: T)  -> bool 
+    where T: Hash + Eq 
+    {
+        let mut set = self.data.lock().expect("Failed to lock hash set for insertion");
+        set.insert(item)
     }
 
 }
