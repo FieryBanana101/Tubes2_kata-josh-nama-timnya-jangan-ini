@@ -2,6 +2,7 @@ use actix_web::{web, App, HttpServer, HttpResponse, http};
 use actix_cors::Cors;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::collections::HashMap;
 
 mod tokenizer;
 mod css_selector;
@@ -11,7 +12,7 @@ mod matching;
 mod lca;
 
 use tokenizer::{parser as tokenizer_parse, Element, Node as TokenizerNode};
-use css_selector::{CssSelectorParser, NodeFilter, Combinator};
+use crate::traversal::{get_traversal_result, TraversalResult};
 
 #[derive(Serialize, Deserialize)]
 pub struct QueryPostBody {
@@ -86,75 +87,67 @@ fn build_flat_nodes(element: &Arc<Element>) -> Vec<QueryResponseNode> {
     }).collect()
 }
 
-fn matches_filter(node: &QueryResponseNode, filter: &NodeFilter) -> bool {
-    if let Some(ref tag) = filter.tag {
-        if node.tag != *tag { return false; }
-    }
-    if let Some(ref ids) = filter.ids {
-        for id in ids {
-            if node.id != *id { return false; }
-        }
-    }
-    if let Some(ref classes) = filter.classes {
-        let node_classes: Vec<&str> = node.class.split_whitespace().collect();
-        for class in classes {
-            if !node_classes.contains(&class.as_str()) { return false; }
-        }
-    }
-    true
-}
-
-fn process_selector(nodes: &[QueryResponseNode], filter: &NodeFilter, root_idx: i32) -> (Vec<Vec<i32>>, Vec<i32>, Vec<i32>) {
-    let mut out_paths: Vec<Vec<i32>> = Vec::new();
-    let mut out_selected = Vec::new();
-    let mut out_traversal = Vec::new();
-    let mut curr_path: Vec<i32> = Vec::new();
+fn build_node_index_map(element: &Arc<Element>) -> HashMap<usize, i32> {
+    let mut map = HashMap::new();
+    let mut counter: i32 = 0;
     
-    fn inner_dfs(nd: &[QueryResponseNode], ci: i32, ft: &NodeFilter, cp: &mut Vec<i32>, ops: &mut Vec<Vec<i32>>, os: &mut Vec<i32>, ot: &mut Vec<i32>) {
-        ot.push(ci);
-        cp.push(ci);
+    fn traverse(elem: &Arc<Element>, map: &mut HashMap<usize, i32>, counter: &mut i32) {
+        let ptr = Arc::as_ptr(elem) as usize;
+        map.insert(ptr, *counter);
+        *counter += 1;
         
-        if matches_filter(&nd[ci as usize], ft) {
-            ops.push(cp.clone());
-            os.push(ci);
-        }
-        
-        for &kid in &nd[ci as usize].children {
-            inner_dfs(nd, kid, ft, cp, ops, os, ot);
-        }
-        
-        ot.push(ci);
-        cp.pop();
-    }
-    
-    inner_dfs(nodes, root_idx, filter, &mut curr_path, &mut out_paths, &mut out_selected, &mut out_traversal);
-    (out_paths, out_selected, out_traversal)
-}
-
-fn process_selector_with_combinator(nodes: &[QueryResponseNode], filter: &NodeFilter, root_idx: i32, combinator: &Option<Combinator>) -> (Vec<Vec<i32>>, Vec<i32>, Vec<i32>) {
-    match combinator {
-        Some(Combinator::Child) | Some(Combinator::DirectNextSibling) => {
-            let mut paths = Vec::new();
-            let mut selected = Vec::new();
-            let mut traversal_path = Vec::new();
-            
-            traversal_path.push(root_idx);
-            
-            let start = &nodes[root_idx as usize];
-            for &c in &start.children {
-                traversal_path.push(c);
-                if matches_filter(&nodes[c as usize], filter) {
-                    paths.push(vec![root_idx, c]);
-                    selected.push(c);
-                }
-                traversal_path.push(c);
+        for child in &elem.children {
+            if let TokenizerNode::Element(c) = child {
+                traverse(c, map, counter);
             }
-            
-            traversal_path.push(root_idx);
-            (paths, selected, traversal_path)
         }
-        _ => process_selector(nodes, filter, root_idx)
     }
+    
+    traverse(element, &mut map, &mut counter);
+    map
+}
+
+fn convert_traversal_result(
+    traversal_result: TraversalResult,
+    flat_nodes: &[QueryResponseNode],
+    node_index_map: &HashMap<usize, i32>,
+    query_parts: &[String],
+    root_idx: i32,
+) -> (Vec<ResultItem>, Vec<i32>) {
+    let mut results = Vec::new();
+    let mut all_selected = Vec::new();
+    
+    let matched_ptrs: Vec<usize> = traversal_result.matched_elements.iter()
+        .map(|e| Arc::as_ptr(e) as usize)
+        .collect();
+    
+    let selected: Vec<i32> = matched_ptrs.iter()
+        .filter_map(|ptr| node_index_map.get(ptr).copied())
+        .collect();
+    
+    let paths: Vec<Vec<i32>> = selected.iter()
+        .map(|&s| vec![root_idx, s])
+        .collect();
+    
+    let traversal_path: Vec<i32> = traversal_result.traversal_order.iter()
+        .map(|e| {
+            let ptr = Arc::as_ptr(e) as usize;
+            node_index_map.get(&ptr).copied().unwrap_or(0)
+        })
+        .collect();
+    
+    for (i, query_text) in query_parts.iter().enumerate() {
+        results.push(ResultItem {
+            query: query_text.clone(),
+            paths: paths.clone(),
+            selected: selected.clone(),
+            traversal_path: traversal_path.clone(),
+        });
+    }
+    
+    all_selected.extend(selected);
+    
+    (results, all_selected)
 }
 
 async fn process_query(body: web::Json<QueryPostBody>) -> QueryResponse {
@@ -175,50 +168,30 @@ async fn process_query(body: web::Json<QueryPostBody>) -> QueryResponse {
         body.text_payload.clone()
     };
 
-    let (root, _) = tokenizer_parse(&html_input).unwrap_or((Arc::new(Element { tag: "".to_string(), attributes: std::collections::HashMap::new(), children: vec![] }), tokenizer::TokenizerTraversal { steps: vec![] }));
+    let (root, _) = tokenizer_parse(&html_input).unwrap_or((
+        Arc::new(Element { 
+            tag: "".to_string(), 
+            attributes: HashMap::new(), 
+            children: vec![] 
+        }), 
+        tokenizer::TokenizerTraversal { steps: vec![] }
+    ));
+    
     let flat_nodes = build_flat_nodes(&root);
     let root_idx = 0;
+    let node_index_map = build_node_index_map(&root);
     
-    let mut parser = CssSelectorParser::new(&body.css_query, false);
-    let mut selector_units = Vec::new();
-    let mut query_parts = Vec::new();
+    let traversal_result = get_traversal_result(&html_input, &body.css_query, body.use_dfs);
     
-    loop {
-        match parser.advance() {
-            Ok((unit, is_eof)) => {
-                let mut parts = Vec::new();
-                if let Some(ref tag) = unit.filter.tag { parts.push(tag.clone()); }
-                if let Some(ref classes) = unit.filter.classes { for c in classes { parts.push(format!(".{}", c)); } }
-                if let Some(ref ids) = unit.filter.ids { for id in ids { parts.push(format!("#{}", id)); } }
-                query_parts.push(parts.join(""));
-                selector_units.push(unit);
-                if is_eof { break; }
-            }
-            Err(_) => break,
-        }
-    }
+    let query_parts: Vec<String> = body.css_query.split(',')
+        .map(|s| s.trim().to_string())
+        .collect();
     
-    let mut results = Vec::new();
-    let mut all_selected = Vec::new();
-    let mut current_root = root_idx;
-    
-    for (i, unit) in selector_units.iter().enumerate() {
-        let query_text = query_parts.get(i).cloned().unwrap_or_default();
-        let (paths, selected, traversal_path) = process_selector_with_combinator(&flat_nodes, &unit.filter, current_root, &unit.prev_combinator);
-        
-        results.push(ResultItem {
-            query: query_text,
-            paths: paths.clone(),
-            selected: selected.clone(),
-            traversal_path,
-        });
-        
-        all_selected.extend(selected);
-        
-        if let Some(last_match) = paths.last() {
-            current_root = *last_match.last().unwrap_or(&current_root);
-        }
-    }
+    let (results, all_selected) = if let Some(result) = traversal_result {
+        convert_traversal_result(result, &flat_nodes, &node_index_map, &query_parts, root_idx)
+    } else {
+        (Vec::new(), Vec::new())
+    };
     
     QueryResponse {
         root_index: root_idx,

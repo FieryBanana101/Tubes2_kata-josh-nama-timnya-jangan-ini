@@ -1,10 +1,16 @@
-use css_lexer::{Lexer as CssLexer, Token as CssToken, Kind as CssTokenType, EmptyAtomSet, SourceOffset};
-
+use css_lexer::{
+    EmptyAtomSet, Kind as CssTokenType, Lexer as CssLexer, SourceOffset, Token as CssToken,
+};
+use serde::{Deserialize, Serialize};
 
 /* DOM Node filter criteria for namespaces */
 #[derive(Debug, Clone, PartialEq)]
-pub enum Combinator { Descendant, Child, DirectNextSibling, NextSibling}
-
+pub enum Combinator {
+    Descendant,
+    Child,
+    DirectNextSibling,
+    NextSibling,
+}
 
 /* DOM Node filter criteria for attributes */
 #[derive(Debug, Clone, PartialEq)]
@@ -15,25 +21,22 @@ pub enum Namespace {
     Named(String),
 }
 
-
 /* DOM Node filter criteria for attributes */
 #[derive(Debug, Clone)]
 pub struct AttributeFilter {
     pub namespace: Namespace,
-    pub name: String, 
+    pub name: String,
     pub operator: Option<String>,
     pub value: Option<String>,
-    pub modifier: Option<char>
+    pub modifier: Option<char>,
 }
-
 
 /* DOM Node filter criteria for pseudo-element and pseudo-classes */
 #[derive(Debug, Clone)]
 pub struct PseudoFilter {
-    pub name: String, 
-    pub args: Option<String> 
+    pub name: String,
+    pub args: Option<String>,
 }
-
 
 /* Struct representing the smallest unit of a CSS Selector, this will be the one compared with individual DOM Nodes */
 #[derive(Debug, Clone)]
@@ -45,7 +48,6 @@ pub struct SelectorUnit {
     pub attributes: Option<Vec<AttributeFilter>>,
     pub pseudos: Option<Vec<PseudoFilter>>,
 }
-
 
 /* Struct representing the definition of a filter which can determine wheter a DOM node match a certain css selector */
 #[derive(Debug, Clone)]
@@ -74,7 +76,6 @@ struct CssLexerWrapper<'a> {
     pub current_text: &'a str,
     pub current_start_pos: usize,
 }
-
 
 /* Struct representing a CSS Selector Parser (implemented parsing from scratch) */
 #[derive(Clone)]
@@ -108,13 +109,12 @@ impl<'a> CssSelectorParser<'a> {
     }
 
     /*
-        Function to parse the CSS selector string fully until the end,
-        this is made to make it easier for some circumstances where we need the entire parsed selector,
-        instead of advancing one-by-one
-     */
+       Function to parse the CSS selector string fully until the end,
+       this is made to make it easier for some circumstances where we need the entire parsed selector,
+       instead of advancing one-by-one
+    */
     pub fn parse_all(&mut self) -> Vec<NodeFilter> {
-
-        let mut vec: Vec<NodeFilter> = Vec::new();      
+        let mut vec: Vec<NodeFilter> = Vec::new();
 
         loop {
             let (filter, is_eof) = self.advance().unwrap();
@@ -123,16 +123,15 @@ impl<'a> CssSelectorParser<'a> {
             if is_eof {
                 break;
             }
-        };
+        }
 
         vec
     }
 
-
     /*
-        Log parsing related-error message to be shown when irrecoverable error happens,
-        if error is recoverable (when there is alternative valid syntax) then error message is kept hidden.
-     */
+       Log parsing related-error message to be shown when irrecoverable error happens,
+       if error is recoverable (when there is alternative valid syntax) then error message is kept hidden.
+    */
     #[inline(always)]
     fn log_parser_error(&mut self, message: &str) -> () {
         self.error_message.push_str(&format!(
@@ -209,7 +208,6 @@ impl<'a> CssSelectorParser<'a> {
         <complex-selector-unit> = [ <compound-selector>? <pseudo-compound-selector>* ]!
     */
     pub fn advance(&mut self) -> Result<(NodeFilter, bool), String> {
-
         /*
             If we are at the beginning, skip leading whitespace and try to get a combinator, if failed then rewind
             This is done to account for relative selector list which comes from inside a pseudo-element.
@@ -331,10 +329,13 @@ impl<'a> CssSelectorParser<'a> {
             .next_token()
             .map_err(|_| self.error_message.clone())?;
 
-        Ok(
-            (NodeFilter{ prev_combinator: combinator, selector: filter },
-            peeker.css_lexer.current_token.kind() == CssTokenType::Eof)
-        )
+        Ok((
+            NodeFilter {
+                prev_combinator: combinator,
+                selector: filter,
+            },
+            peeker.css_lexer.current_token.kind() == CssTokenType::Eof,
+        ))
     }
 
     /*
@@ -371,8 +372,7 @@ impl<'a> CssSelectorParser<'a> {
 
     // <compound-selector> = [ <type-selector>? <subclass-selector>* ]!
     fn parse_compound_selector(&mut self) -> Result<SelectorUnit, ()> {
-
-        let mut filter = SelectorUnit{
+        let mut filter = SelectorUnit {
             namespace: Namespace::Default,
             tag: None,
             ids: None,
@@ -443,13 +443,12 @@ impl<'a> CssSelectorParser<'a> {
     }
 
     /*
-       <pseudo-compound-selector> =  <pseudo-element-selector> <pseudo-class-selector>*
+      <pseudo-compound-selector> =  <pseudo-element-selector> <pseudo-class-selector>*
 
-        This function will return a PseudoFilter describing a <pseudo-compound-selector>,
-        or an error message in String if parsing failed
-     */
+       This function will return a PseudoFilter describing a <pseudo-compound-selector>,
+       or an error message in String if parsing failed
+    */
     fn parse_pseudo_compound_selector(&mut self) -> Result<SelectorUnit, ()> {
-
         let mut filter = SelectorUnit {
             namespace: Namespace::Default,
             tag: None,
@@ -542,8 +541,7 @@ impl<'a> CssSelectorParser<'a> {
         or error message in String if parsing failed
     */
     fn parse_subclass_selector(&mut self) -> Result<SelectorUnit, ()> {
-
-        /*  
+        /*
             We will try complex production first,
             First parsing an <attribute-selector>
         */
@@ -551,8 +549,12 @@ impl<'a> CssSelectorParser<'a> {
         let parse_result = self.parse_attribute_selector();
         if let Ok(attribute_filter) = parse_result {
             return Ok(SelectorUnit {
-                namespace: Namespace::None, tag: None, classes: None, pseudos: None, ids: None,
-                attributes: Some(vec![attribute_filter])
+                namespace: Namespace::None,
+                tag: None,
+                classes: None,
+                pseudos: None,
+                ids: None,
+                attributes: Some(vec![attribute_filter]),
             });
         } else {
             self.css_lexer = saved;
@@ -563,8 +565,12 @@ impl<'a> CssSelectorParser<'a> {
         let parse_result = self.parse_pseudo_class_selector();
         if let Ok(pseudo_filter) = parse_result {
             return Ok(SelectorUnit {
-                namespace: Namespace::None, tag: None, classes: None, attributes: None, ids: None,
-                pseudos: Some(vec![pseudo_filter])
+                namespace: Namespace::None,
+                tag: None,
+                classes: None,
+                attributes: None,
+                ids: None,
+                pseudos: Some(vec![pseudo_filter]),
             });
         } else {
             self.css_lexer = saved;
@@ -900,10 +906,6 @@ impl<'a> CssSelectorParser<'a> {
 }
 
 /*
-    Function to unit test our css selector parser, test result are manually checked for now,
-    Also see this function for reference on how to use the CSS parser.
-
-/* 
     Function to unit test our css selector parser, test result are manually checked for now,
     Also see this function for reference on how to use the CSS parser.
 
