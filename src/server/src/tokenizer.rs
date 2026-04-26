@@ -170,7 +170,7 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
                         children: Vec::new() 
                     };
                     for (key, value) in tag.attributes.iter() {
-                        if !new_node.attributes.contains_key(key) {
+                        if !new_node.attributes.contains_key(&htmlstring_to_string(key)) {
                             new_node.attributes.insert(htmlstring_to_string(key), htmlstring_to_string(value));
                         }
                     }
@@ -189,7 +189,7 @@ pub fn parser(html: &str) -> Result<Arc<Element>, String> {
                         children: Vec::new() 
                     };
                     for (key, value) in tag.attributes.iter() {
-                        if !new_node.attributes.contains_key(key) {
+                        if !new_node.attributes.contains_key(&htmlstring_to_string(key)) {
                             new_node.attributes.insert(htmlstring_to_string(key), htmlstring_to_string(value));
                         }
                     }
