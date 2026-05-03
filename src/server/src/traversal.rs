@@ -5,7 +5,7 @@ use std::thread;
 
 use crate::async_util::*;
 use crate::css_selector::*;
-use crate::tokenizer::{parser, Element, Node};
+use crate::html::{parser, Element, Node};
 
 /*
     Push all children of the current node into the global task pool,
@@ -19,8 +19,13 @@ fn push_all_children<T: AsyncTraversalTracker<ThreadTask>>(
     selector_list_idx: usize,
     selector_unit_idx: usize,
     add_prev_filter: bool,
+    reversed: bool
 ) {
-    for (idx, node) in (&curr_node).children.iter().enumerate().rev() {
+    let iter  = (&curr_node).children.iter().enumerate();
+    let rev_iter = (&curr_node).children.iter().enumerate().rev();
+    let children: Vec<(usize, &Node)> = if reversed { rev_iter.collect() } else { iter.collect() };
+    
+    for (idx, node) in children {
         if let Node::Element(child) = node {
             task_tracker.push(ThreadTask {
                 curr_node: child.clone(),
@@ -97,13 +102,12 @@ fn push_next_sibling<T: AsyncTraversalTracker<ThreadTask>>(
     TODO: return an error message instead of panicking
 */
 pub fn async_traversal_base(
-    html_text: &str,
+    tree: Arc<Element>,
     css_query: &str,
     core_num: usize,
     async_tracker: impl AsyncTraversalTracker<ThreadTask> + Send + Sync + 'static,
-) -> AsyncVec<Arc<Element>> {
-    /* Parse the html text */
-    let (tree, _): (Arc<Element>, _) = parser(html_text).expect("Failed to parse HTML");
+    reversed: bool
+) -> (AsyncVec<Arc<Element>>, AsyncVec<Vec<usize>>) {
 
     /* Parse and prepare the css selector list */
     let mut css_filters: Vec<Vec<NodeFilter>> = Vec::new();
@@ -136,6 +140,7 @@ pub fn async_traversal_base(
     /* Prepare the result vector and global node id tracker to avoid duplication in result */
     let result: Arc<AsyncVec<Arc<Element>>> = Arc::new(AsyncVec::<Arc<Element>>::new());
     let id_tracker: Arc<AsyncHashSet<usize>> = Arc::new(AsyncHashSet::<usize>::new());
+    let path_tracker_list: Arc<AsyncVec<Vec<usize>>> = Arc::new(AsyncVec::<Vec<usize>>::new());
 
     for _thread_id in 0..core_num {
         /* Prepare each shared data structure for the threads, including the atomic counter*/
@@ -143,9 +148,11 @@ pub fn async_traversal_base(
         let shared_filters = Arc::clone(&async_filters);
         let shared_result = Arc::clone(&result);
         let shared_dup_tracker = Arc::clone(&id_tracker);
+        let shared_path_tracker_list = Arc::clone(&path_tracker_list);
         let active_threads_count = Arc::clone(&atomic_counter);
 
         let thread = thread::spawn(move || {
+            let mut path_tracker: Vec<usize>= Vec::new();
             'thread_loop: loop {
                 /*
                     Currently, this thread is inactive, it will try to get a task from the global task pool (will busy wait until found).
@@ -156,6 +163,7 @@ pub fn async_traversal_base(
 
                 while task.is_none() {
                     if active_threads_count.load(Ordering::SeqCst) == 0 {
+                        shared_path_tracker_list.push(path_tracker);
                         break 'thread_loop;
                     }
                     task = shared_task_stracker.pop();
@@ -172,6 +180,8 @@ pub fn async_traversal_base(
                     selector_unit_idx,
                     depth,
                 } = task.unwrap();
+
+                path_tracker.push(curr_node.global_id);
 
                 /* Determine whether the current CSS selector and DOM node described by the task match */
                 let filter_list = shared_filters.get(selector_list_idx).unwrap();
@@ -204,6 +214,7 @@ pub fn async_traversal_base(
                                     selector_list_idx,
                                     selector_unit_idx,
                                     false,
+                                    reversed
                                 );
                             }
 
@@ -254,6 +265,7 @@ pub fn async_traversal_base(
                                 selector_list_idx,
                                 selector_unit_idx + 1,
                                 true,
+                                reversed
                             );
                         }
 
@@ -265,6 +277,7 @@ pub fn async_traversal_base(
                                 selector_list_idx,
                                 selector_unit_idx + 1,
                                 false,
+                                reversed
                             );
                         }
 
@@ -309,6 +322,7 @@ pub fn async_traversal_base(
                                 selector_list_idx,
                                 selector_unit_idx,
                                 false,
+                                reversed
                             );
                         }
 
@@ -340,39 +354,45 @@ pub fn async_traversal_base(
         thread.join().expect("Failed to join threads");
     }
 
-    /* Return the result vector of DOM Node which matches the CSS Selector Unit list */
-    Arc::into_inner(result)
-        .expect("Tried to return traversal result before all threads are finished.")
+    /* Return the result vector of DOM Node which matches the CSS Selector Unit list and path of each thread */
+    (Arc::into_inner(result)
+        .expect("Tried to return traversal result before all threads are finished."),
+    
+    Arc::into_inner(path_tracker_list)
+        .expect("Tried to return path tracker result before all threads are finished."))
+
 }
 
 /*
     Asynchronous DFS traversal to find matching DOM Node.
     This function is only a wrapper for the main traversal function.
 */
-pub fn async_dfs(html_text: &str, css_query: &str, thread_num: usize) -> Option<Vec<Arc<Element>>> {
-    let result: AsyncVec<Arc<Element>> = async_traversal_base(
-        html_text,
+pub fn async_dfs(root: Arc<Element>, css_query: &str, thread_num: usize) -> (Option<Vec<Arc<Element>>>, Option<Vec<Vec<usize>>>) {
+    let (result, path_tracker) = async_traversal_base(
+        root,
         css_query,
         thread_num,
         AsyncStack::<ThreadTask>::new(),
+        true
     );
 
-    result.get_vec()
+    (result.get_vec(), path_tracker.get_vec())
 }
 
 /*
     Asynchronous BFS traversal to find matching DOM Node.
     This function is only a wrapper for the main traversal function.
 */
-pub fn async_bfs(html_text: &str, css_query: &str, thread_num: usize) -> Option<Vec<Arc<Element>>> {
-    let result: AsyncVec<Arc<Element>> = async_traversal_base(
-        html_text,
+pub fn async_bfs(root: Arc<Element>, css_query: &str, thread_num: usize) -> (Option<Vec<Arc<Element>>>, Option<Vec<Vec<usize>>>) {
+    let (result, path_tracker) = async_traversal_base(
+        root,
         css_query,
         thread_num,
         AsyncQueue::<ThreadTask>::new(),
+        false
     );
 
-    result.get_vec()
+    (result.get_vec(), path_tracker.get_vec())
 }
 
 /*
@@ -538,17 +558,20 @@ mod tests {
             .expect("Failed to get the number of CPU cores before a pure DFS traversal")
             .get();
 
+        let (tree, _) = parser(&html).unwrap();
+
         for (idx, selector_query) in testcases.iter().enumerate() {
             eprintln!("\n\n\n##### Traversal Test Case {} #####", idx);
 
-            let dfs_result: Vec<Arc<Element>> =
-                async_dfs(&html, &selector_query, core_num).expect("DFS traversal result is None");
+            let (dfs_result, dfs_path) =
+                async_dfs(tree.clone(), &selector_query, core_num);
 
-            let bfs_result: Vec<Arc<Element>> =
-                async_bfs(&html, &selector_query, core_num).expect("BFS traversal result is None");
+            let (bfs_result, bfs_path) =
+                async_bfs(tree.clone(), &selector_query, core_num);
 
             dbg!(selector_query);
             dbg!(dfs_result);
+            dbg!(dfs_path);
             eprintln!("\n");
             //dbg!(bfs_result);
         }

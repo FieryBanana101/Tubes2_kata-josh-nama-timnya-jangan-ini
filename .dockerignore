@@ -1,0 +1,5 @@
+target/
+.git/
+src/web/dist/
+**/*.rs.bk
+.vscode/

@@ -1,0 +1,19 @@
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: src/server/Dockerfile
+    ports:
+      - "8081:8081"
+    restart: always
+
+  web:
+    build:
+      context: .
+      dockerfile: src/web/Dockerfile
+    ports:
+      - "8080:8080"
+    restart: always
+    depends_on:
+      - server

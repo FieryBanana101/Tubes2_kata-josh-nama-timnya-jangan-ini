@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <title>CSS Selector Test Bench</title>
+        </head>
+        <body>
+            <header id="main-header" class="ui-component">
+                <nav class="navigation" data-state="active">
+                    <ul class="nav-list">
+                        <li class="nav-item active"><a href="#home">Home</a></li>
+                        <li class="nav-item"><a href="#about">About</a></li>
+                        <li class="nav-item dropdown">
+                            <span class="label">Services</span>
+                            <div class="menu-container">
+                                <ul class="sub-menu">
+                                    <li class="sub-item"><a href="/web">Web Design</a></li>
+                                    <li class="sub-item featured"><a href="/seo">SEO Optimization</a></li>
+                                </ul>
+                            </div>
+                        </li>
+                    </ul>
+                </nav>
+            </header>
+
+            <main id="content-area">
+                <section class="container" id="intro">
+                    <h1 class="title">Complex DOM Tree Testing</h1>
+                    <p class="description">This is a <span>nested span inside a p</span> for testing.</p>
+                    
+                    <div class="sibling-wrapper">
+                        <h2 class="section-subtitle">Siblings</h2>
+                        <p class="before">I am before the target.</p>
+                        <div class="target">I am the target element.</div>
+                        <p class="after">I am the immediate sibling.</p>
+                        <p class="after-far">I am a distant sibling.</p>
+                    </div>
+                </section>
+
+                <section class="grid-layout">
+                    <div class="card row-1 col-1 primary">Card 1</div>
+                    <div class="card row-1 col-2 secondary">Card 2</div>
+                    <div class="card row-2 col-1 secondary">Card 3</div>
+                    <div class="card row-2 col-2 primary active">Card 4</div>
+                    <div class="card row-2 col-3 active">Card 5</div>
+                </section>
+
+                <section class="deep-nesting-test">
+                    <div class="level-1">
+                        <div class="level-2">
+                            <div class="level-3">
+                                <div class="level-4">
+                                    <article class="deep-article">
+                                        <header>
+                                            <h3 class="highlight">Recursive Search Target</h3>
+                                        </header>
+                                        <footer class="meta-data">
+                                            <span class="author">Author Name</span>
+                                        </footer>
+                                    </article>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+
+            <div id="test-root">
+                <div id="not-empty-whitespace"> </div>
+                <div id="really-empty"></div>
+
+                <nav>
+                    <a href="https://google.com" id="link-1">Link</a>
+                    <a id="not-a-link">Anchor without href</a>
+                </nav>
+
+                <form>
+                    <input type="text" required id="req-input">
+                    <input type="checkbox" id="opt-input">
+                    <textarea readonly id="readonly-text">Can't touch this</textarea>
+                    <div contenteditable id="editable-div">
+                        <p>I am editable</p>
+                        <span contenteditable="false" id="locked-span">I am nested and locked</span>
+                    </div>
+                </form>
+
+                <section id="gauntlet">
+                    <p id="p1">First P</p>
+                    Text Node (Ignored by -of-type)
+                    <div id="d1">First Div</div>
+                    <p id="p2">Second P</p>
+                    <span id="s1">Only Span</span>
+                    <div id="d2">Last Div</div>
+                    <p id="p3">Last P</p>
+                </section>
+
+                <div id="outer-only">
+                    <div id="inner-only">
+                        <p id="lone-p">Lone P</p>
+                    </div>
+                </div>
+            </div>
+
+            <footer id="main-footer">
+                <div class="footer-links">
+                    <a href="/privacy" class="link">Privacy</a>
+                    <a href="/terms" class="link">Terms</a>
+                </div>
+                <p class="copyright">&lt; &copy; 2026 CSS Parser Test Suite</p>
+            </footer>
+        </body>
+        </html>

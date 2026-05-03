@@ -1,8 +1,22 @@
-use std::collections::{VecDeque, HashSet};
+use std::collections::{VecDeque, HashSet, HashMap};
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::sync::{Arc, Mutex};
-use crate::tokenizer::Element;
+use std::sync::{Arc, Mutex, OnceLock};
+use crate::html::Element;
+
+
+
+/* Shared global variable, for the current tree stored in the heap */
+pub static CURRENT_TREE: OnceLock<Mutex<Arc<Element>>> = OnceLock::new();
+
+
+pub fn get_current_tree() -> &'static Mutex<Arc<Element>> {
+    CURRENT_TREE.get_or_init(|| {
+        Mutex::new(
+            Arc::new(Element { global_id: 0, tag: "".to_string(), attributes: HashMap::new(), children: Vec::new()})
+        )
+    })
+}
 
 
 /*

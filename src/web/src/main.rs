@@ -1,4 +1,5 @@
 use yew::prelude::*;
+use serde_json;
 
 mod bindings;
 mod canvas_tree;

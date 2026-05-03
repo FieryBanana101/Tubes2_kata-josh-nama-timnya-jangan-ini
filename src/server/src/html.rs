@@ -11,6 +11,7 @@ pub enum Node {
 
 #[derive(Debug, Clone)]
 pub struct Element {
+    pub global_id: usize,
     pub tag: String,
     pub attributes: HashMap<String, String>,
     pub children: Vec<Node>,
@@ -28,44 +29,7 @@ pub struct TokenizerTraversal {
     pub steps: Vec<TokenizerStep>,
 }
 
-// DEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUG
-// impl fmt::Display for Node {
-//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//         self.fmt_indent(f, 0)
-//     }
-// }
 
-// impl Node {
-//     fn fmt_indent(&self, f: &mut fmt::Formatter<'_>, depth: usize) -> fmt::Result {
-//         let indent = "  ".repeat(depth);
-//         match self {
-//             Node::Element(el) => {
-//                 write!(f, "{}<{}", indent, el.tag)?;
-//                 for (k, v) in &el.attributes {
-//                     write!(f, " {}=\"{}\"", k, v)?;
-//                 }
-//                 writeln!(f, ">")?;
-//                 for child in &el.children {
-//                     child.fmt_indent(f, depth + 1)?;
-//                 }
-//                 writeln!(f, "{}</{}>", indent, el.tag)
-//             }
-//             Node::Text(s) => writeln!(f, "{}\"{}\"", indent, s),
-//         }
-//     }
-// }
-// DEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUGDEBUG
-
-// pub async fn get_html(url: String) -> Result<String, reqwest::Error> {
-//     let res = reqwest::get(url).await?;
-
-//     if let Some(ct) = res.headers().get("content-type") {
-//         println!("{:?}", ct);
-//     }
-
-//     let body = res.text().await?;
-//     Ok(body)
-// }
 
 fn closes_tag(current: &str, incoming: &str) -> bool {
     match current {
@@ -128,7 +92,9 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal), String> 
     let mut output = "".to_string();
     let mut stack: Vec<Element> = Vec::new();
     let mut head_read = false;
+    let mut global_id_counter = 0;
     let mut root = Element {
+        global_id: 0,
         tag: "".to_string(),
         attributes: HashMap::new(),
         children: Vec::new(),
@@ -141,37 +107,45 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal), String> 
                 let tag_string = htmlstring_to_string(&tag.name);
 
                 if stack.len() == 0 && tag_string != "html" {
-                    let mut node = Element {
+                    let node = Element {
+                        global_id: global_id_counter,
                         tag: "html".to_string(),
                         attributes: HashMap::new(),
                         children: Vec::new(),
                     };
+                    global_id_counter += 1;
                     stack.push(node);
                 }
                 if stack.len() == 1 && HEAD_TAGS.contains(&tag_string.as_str()) {
-                    let mut node = Element {
+                    let node = Element {
+                        global_id: global_id_counter,
                         tag: "head".to_string(),
                         attributes: HashMap::new(),
                         children: Vec::new(),
                     };
+                    global_id_counter += 1;
                     head_read = true;
                     stack.push(node);
                 } else if stack.len() == 1 && tag_string != "head" && tag_string != "body" {
                     if !head_read {
-                        let mut node = Element {
+                        let node = Element {
+                            global_id: global_id_counter,
                             tag: "head".to_string(),
                             attributes: HashMap::new(),
                             children: Vec::new(),
                         };
+                        global_id_counter += 1;
                         if let Some(parent) = stack.last_mut() {
                             parent.children.push(Node::Element(Arc::new(node)));
                         }
                     }
-                    let mut node = Element {
+                    let node = Element {
+                        global_id: global_id_counter,
                         tag: "body".to_string(),
                         attributes: HashMap::new(),
                         children: Vec::new(),
                     };
+                    global_id_counter += 1;
                     stack.push(node);
                 }
                 if let Some(pos) = stack.iter().position(|x| closes_tag(&x.tag, &tag_string)) {
@@ -192,7 +166,6 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal), String> 
                 }
 
                 if tag.self_closing || VOID_TAGS.contains(&tag_string.as_str()) {
-                    println!("SelfClosingToken({})", &tag_string);
 
                     traversal.steps.push(TokenizerStep {
                         step_type: "start_tag".to_string(),
@@ -202,10 +175,12 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal), String> 
                     position += 1;
 
                     let mut new_node = Element {
+                        global_id: global_id_counter,
                         tag: tag_string.clone(),
                         attributes: HashMap::new(),
                         children: Vec::new(),
                     };
+                    global_id_counter += 1;
                     for (key, value) in tag.attributes.iter() {
                         new_node
                             .attributes
@@ -218,7 +193,6 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal), String> 
 
                     output.push_str(&format!("SelfClosingToken({})\n", tag_string));
                 } else {
-                    println!("StartToken({})", &tag_string);
 
                     traversal.steps.push(TokenizerStep {
                         step_type: "start_tag".to_string(),
@@ -228,10 +202,12 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal), String> 
                     position += 1;
 
                     let mut new_node = Element {
+                        global_id: global_id_counter,
                         tag: tag_string.clone(),
                         attributes: HashMap::new(),
                         children: Vec::new(),
                     };
+                    global_id_counter += 1;
                     for (key, value) in tag.attributes.iter() {
                         new_node
                             .attributes
@@ -244,7 +220,6 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal), String> 
             }
             Token::EndTag(tag) => {
                 let tag_string = htmlstring_to_string(&tag.name);
-                println!("EndToken({})", &tag_string);
 
                 traversal.steps.push(TokenizerStep {
                     step_type: "end_tag".to_string(),
@@ -293,7 +268,6 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal), String> 
                         .children
                         .push(Node::Text(Arc::new(tag_string.clone())));
                 }
-                println!();
                 output.push_str(&tag_string);
                 output.push('\n');
             }
@@ -312,29 +286,8 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal), String> 
     if let Some(node) = stack.pop() {
         root = node;
     }
-    fs::write("tokenized.txt", output).ok();
+
     Ok((Arc::new(root), traversal))
 }
 
-// #[tokio::main]
-// pub async fn main(){
-//     let mut input = String::new();
-//     io::stdin().read_line(&mut input).expect("Input failed\n");
-//     let input = input.trim().to_string();
-//     let html = get_html(input).await;
 
-//     match html {
-//         Ok(body) => {
-//             fs::write("html.txt", &body).ok();
-//             let root = parser(&body);
-//             match root {
-//                 Ok(root) => {
-//                     let tree = Node::Element(root);
-//                     // fs::write("tree.txt", tree.to_string()).ok();
-//                 }
-//                 Err(e) => println!("Unable to parse tree: {}", e)
-//             }
-//         }
-//         Err(e) => println!("Unable to fetch HTML: {:?}\n", e)
-//     }
-// }

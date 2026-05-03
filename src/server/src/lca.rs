@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use std::collections::HashMap;
-use crate::tokenizer::{Node, Element};
+use crate::html::{Node, Element};
 
 
 
@@ -187,6 +187,7 @@ mod tests {
 
     fn create_el(tag: &str, children: Vec<Node>) -> Node {
         Node::Element(Arc::new(Element {
+            global_id: 0,
             tag: tag.to_string(),
             children: children,
             attributes: HashMap::new()

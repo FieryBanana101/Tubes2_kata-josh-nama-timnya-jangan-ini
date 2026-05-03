@@ -1,12 +1,12 @@
 use crate::css_selector::{AttributeFilter, CssSelectorParser, PseudoFilter, SelectorUnit};
-use crate::tokenizer::{Element, Node};
+use crate::html::{Element, Node};
 
 /* Implemented a method to match CSS Selector Unit with a DOM Node */
 impl SelectorUnit {
     pub fn match_node(&self, element: &Element, node_child_idx: usize, parent: &Element) -> bool {
         /* Match the tag */
         if let Some(ref selector_tag) = self.tag {
-            if selector_tag != &element.tag {
+            if selector_tag != &element.tag && selector_tag != "*" {
                 return false;
             }
         }

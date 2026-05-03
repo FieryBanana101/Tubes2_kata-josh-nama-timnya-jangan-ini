@@ -1,253 +1,174 @@
-use actix_web::{web, App, HttpServer, HttpResponse, http};
+use actix_web::{web, App, HttpServer, HttpResponse, http, HttpRequest};
 use actix_cors::Cors;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::collections::HashMap;
 
-mod tokenizer;
+mod html;
 mod css_selector;
 mod traversal;
 mod async_util;
 mod matching;
 mod lca;
 
-use tokenizer::{parser as tokenizer_parse, Element, Node as TokenizerNode};
-use css_selector::{CssSelectorParser, NodeFilter, Combinator, SelectorUnit};
+use html::{parser as html_parser, Element, Node as TokenizerNode};
+use async_util::get_current_tree;
+use traversal::{async_dfs, async_bfs};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct QueryPostBody {
-    input_type: String,
-    css_query: String,
-    file_payload: String,
-    url_payload: String,
-    text_payload: String,
+    pub query_type: String,
+    #[serde(default)]
+    pub input_type: String,
+    #[serde(default)]
+    pub content: String,
+    #[serde(default)]
+    pub css_query: String,
+    #[serde(default)]
     pub use_dfs: bool,
+    pub threads: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct QueryResponseNode {
+pub struct FlattenedNode {
     pub tag: String,
     pub class: String,
     pub id: String,
-    pub attributes: Vec<(String, String)>,
-    pub children: Vec<i32>,
+    pub attributes: HashMap<String, String>,
+    pub children: Vec<usize>,
+    pub index: usize,
+}
+
+#[derive(Serialize)]
+pub struct HtmlQueryResponse {
+    pub nodes: HashMap<usize, FlattenedNode>,
+    pub root_index: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ResultItem {
     pub query: String,
-    pub paths: Vec<Vec<i32>>,
-    pub selected: Vec<i32>,
-    pub traversal_path: Vec<i32>,
+    pub paths: Vec<Vec<usize>>,
+    pub selected: Vec<usize>,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct QueryResponse {
-    pub root_index: i32,
-    pub nodes: Vec<QueryResponseNode>,
+#[derive(Serialize)]
+pub struct CSSQueryResponse {
     pub results: Vec<ResultItem>,
-    pub selected_nodes: Vec<i32>,
 }
 
-fn build_flat_nodes(element: &Arc<Element>) -> Vec<QueryResponseNode> {
-    let mut node_list: Vec<(Arc<Element>, i32)> = Vec::new();
-    
-    fn traverse(elem: &Arc<Element>, parent_idx: i32, list: &mut Vec<(Arc<Element>, i32)>) {
-        let my_idx = list.len() as i32;
-        list.push((Arc::clone(elem), parent_idx));
-        
-        for child in &elem.children {
-            if let TokenizerNode::Element(c) = child {
-                traverse(c, my_idx, list);
-            }
+fn flatten_tree(element: &Arc<Element>, nodes: &mut HashMap<usize, FlattenedNode>) {
+    let mut children_ids = Vec::new();
+    for child in &element.children {
+        if let TokenizerNode::Element(child_el) = child {
+            children_ids.push(child_el.global_id);
+            flatten_tree(child_el, nodes);
         }
     }
-    traverse(element, -1, &mut node_list);
-    
-    node_list.iter().enumerate().map(|(i, (elem, _))| {
-        let class = elem.attributes.get("class").cloned().unwrap_or_default();
-        let id = elem.attributes.get("id").cloned().unwrap_or_default();
-        let attrs: Vec<(String, String)> = elem.attributes.iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-        
-        let children: Vec<i32> = node_list.iter()
-            .enumerate()
-            .filter(|(_, (_, p))| *p == i as i32)
-            .map(|(idx, _)| idx as i32)
-            .collect();
-        
-        QueryResponseNode {
-            tag: elem.tag.clone(),
-            class,
-            id,
-            attributes: attrs,
-            children,
-        }
-    }).collect()
+
+    let class = element.attributes.get("class").cloned().unwrap_or_default();
+    let id = element.attributes.get("id").cloned().unwrap_or_default();
+
+    nodes.insert(element.global_id, FlattenedNode {
+        tag: element.tag.clone(),
+        class,
+        id,
+        attributes: element.attributes.clone(),
+        children: children_ids,
+        index: element.global_id,
+    });
 }
 
-fn matches_filter(node: &QueryResponseNode, filter: &SelectorUnit) -> bool {
-    if let Some(ref tag) = filter.tag {
-        if node.tag != *tag { return false; }
-    }
-    if let Some(ref ids) = filter.ids {
-        for id in ids {
-            if node.id != *id { return false; }
-        }
-    }
-    if let Some(ref classes) = filter.classes {
-        let node_classes: Vec<&str> = node.class.split_whitespace().collect();
-        for class in classes {
-            if !node_classes.contains(&class.as_str()) { return false; }
-        }
-    }
-    true
-}
-
-fn process_selector(nodes: &[QueryResponseNode], filter: &SelectorUnit, root_idx: i32) -> (Vec<Vec<i32>>, Vec<i32>, Vec<i32>) {
-    let mut out_paths: Vec<Vec<i32>> = Vec::new();
-    let mut out_selected = Vec::new();
-    let mut out_traversal = Vec::new();
-    let mut curr_path: Vec<i32> = Vec::new();
-    
-    fn inner_dfs(nd: &[QueryResponseNode], ci: i32, ft: &SelectorUnit, cp: &mut Vec<i32>, ops: &mut Vec<Vec<i32>>, os: &mut Vec<i32>, ot: &mut Vec<i32>) {
-        ot.push(ci);
-        cp.push(ci);
-        
-        if matches_filter(&nd[ci as usize], ft) {
-            ops.push(cp.clone());
-            os.push(ci);
-        }
-        
-        for &kid in &nd[ci as usize].children {
-            inner_dfs(nd, kid, ft, cp, ops, os, ot);
-        }
-        
-        ot.push(ci);
-        cp.pop();
-    }
-    
-    inner_dfs(nodes, root_idx, filter, &mut curr_path, &mut out_paths, &mut out_selected, &mut out_traversal);
-    (out_paths, out_selected, out_traversal)
-}
-
-fn process_selector_with_combinator(nodes: &[QueryResponseNode], filter: &SelectorUnit, root_idx: i32, combinator: &Option<Combinator>) -> (Vec<Vec<i32>>, Vec<i32>, Vec<i32>) {
-    match combinator {
-        Some(Combinator::Child) | Some(Combinator::DirectNextSibling) => {
-            let mut paths = Vec::new();
-            let mut selected = Vec::new();
-            let mut traversal_path = Vec::new();
+async fn process_query_html(body: QueryPostBody) -> HttpResponse {
+    let html_input = match body.input_type.as_str() {
+        "file" | "plain_text" => body.content,
+        "url" => {
+            let client = reqwest::ClientBuilder::new()
+                .danger_accept_invalid_certs(true)
+                .user_agent("Mozilla/5.0")
+                .build()
+                .unwrap();
             
-            traversal_path.push(root_idx);
-            
-            let start = &nodes[root_idx as usize];
-            for &c in &start.children {
-                traversal_path.push(c);
-                if matches_filter(&nodes[c as usize], filter) {
-                    paths.push(vec![root_idx, c]);
-                    selected.push(c);
+            match client.get(&body.content).send().await {
+                Ok(resp) => resp.text().await.unwrap_or_default(),
+                Err(e) => {
+                    eprintln!("Network/Request Error: {:?}", e);
+                    return HttpResponse::InternalServerError().body(format!("Failed to fetch URL: {}", e));
                 }
-                traversal_path.push(c);
             }
-            
-            traversal_path.push(root_idx);
-            (paths, selected, traversal_path)
         }
-        _ => process_selector(nodes, filter, root_idx)
-    }
-}
-
-async fn process_query(body: web::Json<QueryPostBody>) -> QueryResponse {
-    let client = reqwest::ClientBuilder::new()
-        .danger_accept_invalid_certs(true)
-        .user_agent("Mozilla/5.0")
-        .build()
-        .unwrap();
-    
-    let html_input = if !body.file_payload.is_empty() {
-        body.file_payload.clone()
-    } else if !body.url_payload.is_empty() {
-        match client.get(&body.url_payload).send().await {
-            Ok(resp) => resp.text().await.unwrap_or_default(),
-            Err(_) => String::new(),
-        }
-    } else {
-        body.text_payload.clone()
+        _ => return HttpResponse::BadRequest().body("Invalid input_type. Expected 'file', 'plain_text', or 'url'."),
     };
 
-    let (root, _) = tokenizer_parse(&html_input).unwrap_or((Arc::new(Element { tag: "".to_string(), attributes: std::collections::HashMap::new(), children: vec![] }), tokenizer::TokenizerTraversal { steps: vec![] }));
-    let flat_nodes = build_flat_nodes(&root);
-    let root_idx = 0;
-    
-    let mut parser = CssSelectorParser::new(&body.css_query, false);
-    let mut selector_units = Vec::new();
-    let mut query_parts = Vec::new();
-    
-    loop {
-        match parser.advance() {
-            Ok((unit, is_eof)) => {
-                let mut parts = Vec::new();
-                if let Some(ref tag) = unit.selector.tag { parts.push(tag.clone()); }
-                if let Some(ref classes) = unit.selector.classes { for c in classes { parts.push(format!(".{}", c)); } }
-                if let Some(ref ids) = unit.selector.ids { for id in ids { parts.push(format!("#{}", id)); } }
-                query_parts.push(parts.join(""));
-                selector_units.push(unit);
-                if is_eof { break; }
-            }
-            Err(_) => break,
-        }
+    if let Ok((root, _)) = html_parser(&html_input) {
+        let mut tree_mutex = get_current_tree().lock().unwrap();
+        *tree_mutex = Arc::clone(&root);
+
+        let mut nodes = HashMap::new();
+        flatten_tree(&root, &mut nodes);
+
+        HttpResponse::Ok().json(HtmlQueryResponse {
+            root_index: root.global_id,
+            nodes,
+        })
+    } else {
+        HttpResponse::InternalServerError().body("Failed to parse HTML")
     }
+}
+
+async fn process_query_css(body: QueryPostBody) -> HttpResponse {
+    let tree = {
+        let tree_mutex = get_current_tree().lock().unwrap();
+        tree_mutex.clone()
+    };
+    let threads = body.threads.unwrap_or(1);
     
-    let mut results = Vec::new();
-    let mut all_selected = Vec::new();
-    let mut current_root = root_idx;
-    
-    for (i, unit) in selector_units.iter().enumerate() {
-        let query_text = query_parts.get(i).cloned().unwrap_or_default();
-        let (paths, selected, traversal_path) = process_selector_with_combinator(&flat_nodes, &unit.selector, current_root, &unit.prev_combinator);
-        
-        results.push(ResultItem {
-            query: query_text,
-            paths: paths.clone(),
-            selected: selected.clone(),
-            traversal_path,
-        });
-        
-        all_selected.extend(selected);
-        
-        if let Some(last_match) = paths.last() {
-            current_root = *last_match.last().unwrap_or(&current_root);
-        }
-    }
-    
-    QueryResponse {
-        root_index: root_idx,
-        nodes: flat_nodes,
-        results,
-        selected_nodes: all_selected,
-    }
+    let (matched, tracker) = if body.use_dfs {
+        async_dfs(tree, &body.css_query, threads)
+    } else {
+        async_bfs(tree, &body.css_query, threads)
+    };
+
+    let selected: Vec<usize> = matched.unwrap_or_default().iter().map(|n| n.global_id).collect();
+    let paths = tracker.unwrap_or_default();
+
+    let result = ResultItem {
+        query: body.css_query.clone(),
+        paths,
+        selected,
+    };
+
+    HttpResponse::Ok().json(CSSQueryResponse {
+        results: vec![result],
+    })
+}
+
+async fn process_query_lca(_body: QueryPostBody) -> HttpResponse {
+    HttpResponse::Ok().json(serde_json::json!({}))
 }
 
 async fn query(body: web::Json<QueryPostBody>) -> HttpResponse {
-    let res = process_query(body).await;
-    HttpResponse::Ok().json(res)
+    let body = body.into_inner();
+    println!("Received query: {:?}", body.query_type);
+    match body.query_type.as_str() {
+        "html" => process_query_html(body).await,
+        "css" => process_query_css(body).await,
+        "lca" => process_query_lca(body).await,
+        _ => HttpResponse::BadRequest().body("Invalid query_type"),
+    }
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    println!("Starting server on 0.0.0.0:8081");
     HttpServer::new(|| {
-        let cors = Cors::default()
-            .allowed_origin("http://localhost:8080")
-            .allowed_methods(vec!["GET", "POST"])
-            .allowed_headers(vec![http::header::ACCEPT])
-            .allowed_header(http::header::CONTENT_TYPE)
-            .max_age(3600);
+        let cors = Cors::permissive();
 
         App::new()
             .wrap(cors)
             .service(web::resource("/query").route(web::post().to(query)))
     })
-    .bind(("127.0.0.1", 8081))?
+    .bind(("0.0.0.0", 8081))?
     .run()
     .await
 }
