@@ -41,10 +41,85 @@ struct RenderLink {
 #[component]
 pub fn CanvasTree() -> Html {
     let ctx = use_context::<GraphContext>().unwrap();
+    let lca_selected = ctx.lca_selected.clone();
 
-    use_effect_with(ctx.clone(), move |ctx| {
-        let json = ctx.graph_data.clone();
-        render_tree(&json);
+    use_effect_with(ctx.graph_data.clone(), move |json| {
+        render_tree(json);
+        || ()
+    });
+
+    // Expose window.showNodeDetail to JS
+    let new_ctx = ctx.clone();
+    use_effect(move || {
+        let inner_ctx = new_ctx.clone();
+        let closure = Closure::<dyn Fn(usize, f64, f64, String, String, String, JsValue)>::new(
+            move |idx: usize, x: f64, y: f64, tag: String, class: String, id: String, attrs_js: JsValue| {
+                let mut attributes = Vec::new();
+                if attrs_js.is_object() {
+                    let keys = Reflect::own_keys(&attrs_js).unwrap_or_else(|_| Array::new());
+                    for i in 0..keys.length() {
+                        let key = keys.get(i).as_string().unwrap_or_default();
+                        let val = Reflect::get(&attrs_js, &JsValue::from_str(&key))
+                            .ok()
+                            .and_then(|v| v.as_string())
+                            .unwrap_or_default();
+                        if !key.is_empty() {
+                            attributes.push((key, val));
+                        }
+                    }
+                }
+
+                inner_ctx.dispatch(crate::GraphAction::ShowDetail(crate::DetailNode {
+                    x,
+                    y,
+                    node_index: idx as i32,
+                    tag,
+                    class,
+                    id,
+                    attributes,
+                }));
+            },
+        );
+
+        let window = web_sys::window().unwrap();
+        let _ = Reflect::set(
+            &window,
+            &JsValue::from_str("showNodeDetail"),
+            closure.as_ref().unchecked_ref(),
+        );
+        closure.forget();
+        || ()
+    });
+
+    // Effect to highlight LCA selection in idle state
+    let animation_type = ctx.animation_type;
+    let animation_active = ctx.animation_active;
+    use_effect_with((lca_selected, animation_type, animation_active), move |(selected, anim_type, active)| {
+        if let Some(document) = web_sys::window().and_then(|w| w.document()) {
+            if let Some(container) = document.get_element_by_id(TREE_CONTAINER_ID) {
+                if let Ok(node_cards) = container.query_selector_all(".graph-node") {
+                    for i in 0..node_cards.length() {
+                        if let Some(card_el) = node_cards.get(i).and_then(|n| n.dyn_into::<web_sys::Element>().ok()) {
+                            let id_str = card_el.get_attribute("id").unwrap_or_default();
+                            let node_index = id_str
+                                .strip_prefix("graph-node-")
+                                .and_then(|s| s.parse::<usize>().ok())
+                                .unwrap_or(i as usize);
+                            
+                            // Show LCA highlights only if no animation is currently active AND we are in idle state
+                            if *anim_type == crate::AnimationType::None && !*active && selected.contains(&node_index) {
+                                let _ = card_el.set_attribute("data-state", "lca");
+                            } else {
+                                // Clear LCA state if an animation is active OR node is deselected
+                                if card_el.get_attribute("data-state") == Some("lca".to_string()) {
+                                    let _ = card_el.set_attribute("data-state", "not-visited");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         || ()
     });
 
@@ -333,7 +408,7 @@ fn draw_svg(document: &Document, container: &Element, layout: &LayoutResult) -> 
                   data-[state=lca]:border-red-500' \
                   style='width:{w}px;height:{h}px;display:flex;flex-direction:column;justify-content:center;text-align:center;' \
                   onclick='window.selectNode({idx})' \
-                  oncontextmenu='event.preventDefault(); window.setLCATarget({idx})'>\
+                  oncontextmenu='event.preventDefault(); window.showNodeDetail({idx}, {x}, {y}, \"{tag}\", \"{class}\", \"{id}\", JSON.parse(decodeURIComponent(\"{attrs_encoded}\")))'>\
                <div class='font-bold text-[13px] text-blue-900 data-[state=selected]:text-green-900 mb-0.5'>&lt;{tag}&gt;</div>\
                {id_html}\
                {class_html}\
@@ -345,6 +420,15 @@ fn draw_svg(document: &Document, container: &Element, layout: &LayoutResult) -> 
             h = CARD_HEIGHT,
             id_html = id_html,
             class_html = class_html,
+            x = x,
+            y = y,
+            class = node.class_name,
+            id = node.id_attr,
+            attrs_encoded = web_sys::js_sys::encode_uri_component(&JSON::stringify(&node.attributes.iter().fold(web_sys::js_sys::Object::new().into(), |acc, (k, v)| {
+                let obj: web_sys::js_sys::Object = acc.dyn_into().unwrap();
+                let _ = Reflect::set(&obj, &JsValue::from_str(k), &JsValue::from_str(v));
+                obj.into()
+            })).unwrap_or(JsValue::from_str("{}").into()).as_string().unwrap_or_else(|| "{}".to_string()))
         );
 
         card.set_inner_html(&html);

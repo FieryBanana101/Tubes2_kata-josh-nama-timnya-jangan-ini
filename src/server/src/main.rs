@@ -12,8 +12,9 @@ mod matching;
 mod lca;
 
 use html::{parser as html_parser, Element, Node as TokenizerNode};
-use async_util::get_current_tree;
+use async_util::{get_current_tree};
 use traversal::{async_dfs, async_bfs};
+use lca::{init_binary_lift_metadata};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct QueryPostBody {
@@ -27,6 +28,7 @@ pub struct QueryPostBody {
     #[serde(default)]
     pub use_dfs: bool,
     pub threads: Option<usize>,
+    pub search_limit: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -43,17 +45,26 @@ pub struct FlattenedNode {
 pub struct HtmlQueryResponse {
     pub nodes: HashMap<usize, FlattenedNode>,
     pub root_index: usize,
+    pub nodes_count: usize,
+    pub duration: u128,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ResultItem {
     pub query: String,
-    pub paths: Vec<Vec<usize>>,
+    pub paths: Vec<Vec<(usize, usize)>>,
     pub selected: Vec<usize>,
+    pub duration: u128,
+    pub nodes_count: usize,
 }
 
 #[derive(Serialize)]
 pub struct CSSQueryResponse {
+    pub results: Vec<ResultItem>,
+}
+
+#[derive(Serialize)]
+pub struct LCAQueryResponse {
     pub results: Vec<ResultItem>,
 }
 
@@ -100,9 +111,11 @@ async fn process_query_html(body: QueryPostBody) -> HttpResponse {
         _ => return HttpResponse::BadRequest().body("Invalid input_type. Expected 'file', 'plain_text', or 'url'."),
     };
 
-    if let Ok((root, _)) = html_parser(&html_input) {
+    if let Ok((root, _, nodes_count, duration)) = html_parser(&html_input) {
         let mut tree_mutex = get_current_tree().lock().unwrap();
         *tree_mutex = Arc::clone(&root);
+
+        init_binary_lift_metadata(&TokenizerNode::Element(root.clone()));
 
         let mut nodes = HashMap::new();
         flatten_tree(&root, &mut nodes);
@@ -110,6 +123,8 @@ async fn process_query_html(body: QueryPostBody) -> HttpResponse {
         HttpResponse::Ok().json(HtmlQueryResponse {
             root_index: root.global_id,
             nodes,
+            nodes_count,
+            duration,
         })
     } else {
         HttpResponse::InternalServerError().body("Failed to parse HTML")
@@ -122,20 +137,24 @@ async fn process_query_css(body: QueryPostBody) -> HttpResponse {
         tree_mutex.clone()
     };
     let threads = body.threads.unwrap_or(1);
+    let limit = body.search_limit.unwrap_or(1);
     
-    let (matched, tracker) = if body.use_dfs {
-        async_dfs(tree, &body.css_query, threads)
+    let (matched, tracker, nodes_count, duration) = if body.use_dfs {
+        async_dfs(tree, &body.css_query, threads, limit)
     } else {
-        async_bfs(tree, &body.css_query, threads)
+        async_bfs(tree, &body.css_query, threads, limit)
     };
 
-    let selected: Vec<usize> = matched.unwrap_or_default().iter().map(|n| n.global_id).collect();
+    let matched_nodes = matched.unwrap_or_default();
+    let selected: Vec<usize> = matched_nodes.iter().map(|n| n.global_id).collect();
     let paths = tracker.unwrap_or_default();
 
     let result = ResultItem {
         query: body.css_query.clone(),
         paths,
         selected,
+        duration,
+        nodes_count,
     };
 
     HttpResponse::Ok().json(CSSQueryResponse {
@@ -143,8 +162,32 @@ async fn process_query_css(body: QueryPostBody) -> HttpResponse {
     })
 }
 
-async fn process_query_lca(_body: QueryPostBody) -> HttpResponse {
-    HttpResponse::Ok().json(serde_json::json!({}))
+async fn process_query_lca(body: QueryPostBody) -> HttpResponse {
+    let node_indices: Vec<usize> = match serde_json::from_str(&body.content) {
+        Ok(indices) => indices,
+        Err(_) => {
+            return HttpResponse::BadRequest().body("Invalid content for LCA. Expected JSON array of integers.");
+        }
+    };
+
+    println!("Processing LCA for nodes: {:?}", node_indices);
+    
+    // Dummy response for now as requested
+    // Format: Vec<Vec<(dep, node)>> and selected node
+    let dummy_paths = vec![vec![(0, 0), (0, 1), (1, 2)]]; // Example traversal
+    let dummy_lca_node = 0usize;
+
+    let result = ResultItem {
+        query: format!("LCA for {:?}", node_indices),
+        paths: dummy_paths,
+        selected: vec![dummy_lca_node],
+        duration: 0,
+        nodes_count: 3, // nodes in dummy_paths
+    };
+
+    HttpResponse::Ok().json(LCAQueryResponse {
+        results: vec![result],
+    })
 }
 
 async fn query(body: web::Json<QueryPostBody>) -> HttpResponse {

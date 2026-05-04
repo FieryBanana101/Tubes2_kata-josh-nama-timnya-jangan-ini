@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock, Mutex};
 use std::collections::HashMap;
 use crate::html::{Node, Element};
 
@@ -21,12 +21,32 @@ fn node_ptr_to_usize(node: Node) -> usize {
 
 
 /* Structure describing a preprocessing result for binary lift operation on a tree */
+#[derive(Debug, Clone)]
 pub struct BinaryLiftMetadata {
     ancestors               : Vec<Vec<usize>>,
     max_precompute_height   : usize,
     depth_map               : Vec<usize>, 
     id_to_node_map          : Vec<Node>,
     node_to_id_map          : HashMap<usize, usize>
+}
+
+
+pub static CURRENT_BINARY_LIFT_METADATA: OnceLock<Mutex<BinaryLiftMetadata>> = OnceLock::new();
+
+
+pub fn get_current_binary_lift_metadata() -> &'static Mutex<BinaryLiftMetadata> {
+    CURRENT_BINARY_LIFT_METADATA.get().unwrap()
+}
+
+pub fn init_binary_lift_metadata(root: &Node) {
+
+    let new_data = preprocess_tree(root);
+
+    if let Err(_) = CURRENT_BINARY_LIFT_METADATA.set(Mutex::new(new_data.clone())) {
+        let mutex = CURRENT_BINARY_LIFT_METADATA.get().unwrap();
+        let mut guard = mutex.lock().unwrap();
+        *guard = new_data;
+    }
 }
 
 

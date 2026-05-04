@@ -2,6 +2,8 @@ use std::marker::{Send, Sync};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
+use std::time;
+use std::collections::HashSet;
 
 use crate::async_util::*;
 use crate::css_selector::*;
@@ -106,8 +108,9 @@ pub fn async_traversal_base(
     css_query: &str,
     core_num: usize,
     async_tracker: impl AsyncTraversalTracker<ThreadTask> + Send + Sync + 'static,
-    reversed: bool
-) -> (AsyncVec<Arc<Element>>, AsyncVec<Vec<usize>>) {
+    reversed: bool,
+    limit: usize
+) -> (AsyncVec<Arc<Element>>, AsyncVec<Vec<(usize, usize)>>, u128) {
 
     /* Parse and prepare the css selector list */
     let mut css_filters: Vec<Vec<NodeFilter>> = Vec::new();
@@ -121,7 +124,8 @@ pub fn async_traversal_base(
     let async_filters: Arc<Vec<Vec<NodeFilter>>> = Arc::new(css_filters);
 
     /* Prepare asyncrhonous global task pool, atomic counter for number of active thread, and thread list */
-    let atomic_counter: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+    let thread_counter: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+    let matched_counter: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
     let mut threads: Vec<thread::JoinHandle<()>> = vec![];
     let async_tracker = Arc::new(async_tracker);
 
@@ -140,7 +144,9 @@ pub fn async_traversal_base(
     /* Prepare the result vector and global node id tracker to avoid duplication in result */
     let result: Arc<AsyncVec<Arc<Element>>> = Arc::new(AsyncVec::<Arc<Element>>::new());
     let id_tracker: Arc<AsyncHashSet<usize>> = Arc::new(AsyncHashSet::<usize>::new());
-    let path_tracker_list: Arc<AsyncVec<Vec<usize>>> = Arc::new(AsyncVec::<Vec<usize>>::new());
+    let path_tracker_list: Arc<AsyncVec<Vec<(usize, usize)>>> = Arc::new(AsyncVec::<Vec<(usize, usize)>>::new());
+
+    let start_time = time::Instant::now();
 
     for _thread_id in 0..core_num {
         /* Prepare each shared data structure for the threads, including the atomic counter*/
@@ -149,10 +155,11 @@ pub fn async_traversal_base(
         let shared_result = Arc::clone(&result);
         let shared_dup_tracker = Arc::clone(&id_tracker);
         let shared_path_tracker_list = Arc::clone(&path_tracker_list);
-        let active_threads_count = Arc::clone(&atomic_counter);
+        let active_threads_count = Arc::clone(&thread_counter);
+        let matched_count = Arc::clone(&matched_counter);
 
-        let thread = thread::spawn(move || {
-            let mut path_tracker: Vec<usize>= Vec::new();
+        let thread: thread::JoinHandle<()> = thread::spawn(move || {
+            let mut path_tracker: Vec<(usize, usize)>= Vec::new();
             'thread_loop: loop {
                 /*
                     Currently, this thread is inactive, it will try to get a task from the global task pool (will busy wait until found).
@@ -160,9 +167,12 @@ pub fn async_traversal_base(
                     number of active thread is zero (i.e. no thread is doing any task)
                 */
                 let mut task = shared_task_stracker.pop();
-
+                
                 while task.is_none() {
-                    if active_threads_count.load(Ordering::SeqCst) == 0 {
+                    if active_threads_count.load(Ordering::SeqCst) == 0 || 
+                        (limit != 0 && matched_count.load(Ordering::SeqCst) >= limit) 
+                    {
+                        path_tracker.sort();
                         shared_path_tracker_list.push(path_tracker);
                         break 'thread_loop;
                     }
@@ -180,8 +190,15 @@ pub fn async_traversal_base(
                     selector_unit_idx,
                     depth,
                 } = task.unwrap();
-
-                path_tracker.push(curr_node.global_id);
+                
+                
+                if limit != 0 && matched_count.load(Ordering::SeqCst) >= limit {
+                    path_tracker.sort();
+                    shared_path_tracker_list.push(path_tracker);
+                    active_threads_count.fetch_sub(1, Ordering::SeqCst);
+                    break 'thread_loop;
+                }
+                path_tracker.push((parent_node.global_id, curr_node.global_id));
 
                 /* Determine whether the current CSS selector and DOM node described by the task match */
                 let filter_list = shared_filters.get(selector_list_idx).unwrap();
@@ -195,10 +212,19 @@ pub fn async_traversal_base(
                 if node_match_filter {
                     /* If there are no more selector unit to match from the CSS selector list */
                     if selector_unit_idx + 1 == filter_list.len() {
+
                         /* The current node match the css selector but check the ID tracker to avoid duplicate result */
                         let curr_node_raw_ptr = Arc::into_raw(curr_node.clone()) as usize;
                         if shared_dup_tracker.insert(curr_node_raw_ptr) {
-                            shared_result.push(curr_node.clone());
+                            if limit != 0 && matched_count.fetch_add(1, Ordering::SeqCst) >= limit {
+                                path_tracker.sort();
+                                shared_path_tracker_list.push(path_tracker);
+                                active_threads_count.fetch_sub(1, Ordering::SeqCst);
+                                break 'thread_loop;
+                            }
+                            else {
+                                shared_result.push(curr_node.clone());
+                            }
                         }
 
                         /*
@@ -354,12 +380,18 @@ pub fn async_traversal_base(
         thread.join().expect("Failed to join threads");
     }
 
+    /* Measure execution time */
+    let duration = start_time.elapsed().as_micros();
+
     /* Return the result vector of DOM Node which matches the CSS Selector Unit list and path of each thread */
     (Arc::into_inner(result)
         .expect("Tried to return traversal result before all threads are finished."),
     
     Arc::into_inner(path_tracker_list)
-        .expect("Tried to return path tracker result before all threads are finished."))
+        .expect("Tried to return path tracker result before all threads are finished."),
+    
+    duration
+    )
 
 }
 
@@ -367,32 +399,50 @@ pub fn async_traversal_base(
     Asynchronous DFS traversal to find matching DOM Node.
     This function is only a wrapper for the main traversal function.
 */
-pub fn async_dfs(root: Arc<Element>, css_query: &str, thread_num: usize) -> (Option<Vec<Arc<Element>>>, Option<Vec<Vec<usize>>>) {
-    let (result, path_tracker) = async_traversal_base(
+pub fn async_dfs(root: Arc<Element>, css_query: &str, thread_num: usize, limit: usize) -> (Option<Vec<Arc<Element>>>, Option<Vec<Vec<(usize, usize)>>>, usize, u128) {
+    let (result, path_tracker, duration) = async_traversal_base(
         root,
         css_query,
         thread_num,
         AsyncStack::<ThreadTask>::new(),
-        true
+        true,
+        limit
     );
 
-    (result.get_vec(), path_tracker.get_vec())
+    let path_result = path_tracker.get_vec();
+    let nodes_count = if let Some(paths) = &path_result {
+        paths.iter().flatten().collect::<HashSet<_>>().len()
+    }
+    else { 
+        0 
+    }; 
+
+    (result.get_vec(), path_result, nodes_count, duration)
 }
 
 /*
     Asynchronous BFS traversal to find matching DOM Node.
     This function is only a wrapper for the main traversal function.
 */
-pub fn async_bfs(root: Arc<Element>, css_query: &str, thread_num: usize) -> (Option<Vec<Arc<Element>>>, Option<Vec<Vec<usize>>>) {
-    let (result, path_tracker) = async_traversal_base(
+pub fn async_bfs(root: Arc<Element>, css_query: &str, thread_num: usize, limit: usize) -> (Option<Vec<Arc<Element>>>, Option<Vec<Vec<(usize, usize)>>>, usize, u128) {
+    let (result, path_tracker, duration) = async_traversal_base(
         root,
         css_query,
         thread_num,
         AsyncQueue::<ThreadTask>::new(),
-        false
+        false,
+        limit
     );
 
-    (result.get_vec(), path_tracker.get_vec())
+    let path_result = path_tracker.get_vec();
+    let nodes_count = if let Some(paths) = &path_result {
+        paths.iter().flatten().collect::<HashSet<_>>().len()
+    }
+    else { 
+        0 
+    }; 
+
+    (result.get_vec(), path_result, nodes_count, duration)
 }
 
 /*
@@ -558,16 +608,16 @@ mod tests {
             .expect("Failed to get the number of CPU cores before a pure DFS traversal")
             .get();
 
-        let (tree, _) = parser(&html).unwrap();
+        let (tree, _, _, _) = parser(&html).unwrap();
 
         for (idx, selector_query) in testcases.iter().enumerate() {
             eprintln!("\n\n\n##### Traversal Test Case {} #####", idx);
 
-            let (dfs_result, dfs_path) =
-                async_dfs(tree.clone(), &selector_query, core_num);
+            let (dfs_result, dfs_path, nodes_count, duration) =
+                async_dfs(tree.clone(), &selector_query, core_num, 0);
 
-            let (bfs_result, bfs_path) =
-                async_bfs(tree.clone(), &selector_query, core_num);
+            let (bfs_result, bfs_path, node_count, duration) =
+                async_bfs(tree.clone(), &selector_query, core_num, 0);
 
             dbg!(selector_query);
             dbg!(dfs_result);

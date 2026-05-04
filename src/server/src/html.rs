@@ -1,7 +1,9 @@
 use html5gum::{HtmlString, Token, Tokenizer};
-use reqwest;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt, fs, io, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
+use std::time;
+
+use crate::async_util::*;
 
 #[derive(Debug, Clone)]
 pub enum Node {
@@ -88,7 +90,7 @@ const VOID_TAGS: &[&str] = &[
 const HEAD_TAGS: &[&str] = &[
     "title", "base", "link", "style", "meta", "script", "noscript", "template",
 ];
-pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal), String> {
+pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal, usize, u128), String> {
     let mut output = "".to_string();
     let mut stack: Vec<Element> = Vec::new();
     let mut head_read = false;
@@ -99,8 +101,11 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal), String> 
         attributes: HashMap::new(),
         children: Vec::new(),
     };
+
     let mut traversal = TokenizerTraversal { steps: Vec::new() };
     let mut position = 0;
+    let start_time = time::Instant::now();
+    
     for token in Tokenizer::new(html).infallible() {
         match token {
             Token::StartTag(tag) => {
@@ -287,7 +292,9 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal), String> 
         root = node;
     }
 
-    Ok((Arc::new(root), traversal))
+    let duration = start_time.elapsed().as_micros();
+
+    Ok((Arc::new(root), traversal, global_id_counter, duration))
 }
 
 
