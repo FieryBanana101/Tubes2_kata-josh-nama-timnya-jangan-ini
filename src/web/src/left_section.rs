@@ -21,6 +21,7 @@ struct QueryPostBody {
 #[derive(Deserialize)]
 struct HtmlQueryResponse {
     nodes_count: usize,
+    depth: usize,
     duration: u128,
     logs: Vec<String>,
     #[serde(default)]
@@ -36,6 +37,7 @@ pub fn LeftSection() -> Html {
     
     // HTML Metrics
     let html_nodes_count = use_state(|| 0usize);
+    let html_depth = use_state(|| 0usize);
     let html_duration = use_state(|| 0u128);
 
     // HTML Input State
@@ -86,9 +88,11 @@ pub fn LeftSection() -> Html {
         let text_input_ref = text_input_ref.clone();
         let html_submitted = html_submitted.clone();
         let html_nodes_count = html_nodes_count.clone();
+        let html_depth = html_depth.clone();
         let html_duration = html_duration.clone();
 
         Callback::from(move |_| {
+            let html_depth = html_depth.clone();
             let content = match (*input_type).as_str() {
                 "file" => (*file_content).clone(),
                 "url" => url_input_ref.cast::<HtmlInputElement>().map(|i| i.value()).unwrap_or_default(),
@@ -132,6 +136,7 @@ pub fn LeftSection() -> Html {
                                     return;
                                 }
                                 html_nodes_count.set(parsed.nodes_count);
+                                html_depth.set(parsed.depth);
                                 html_duration.set(parsed.duration);
                                 ctx.dispatch(GraphAction::AddLogs(parsed.logs));
                             }
@@ -350,10 +355,14 @@ pub fn LeftSection() -> Html {
                             format!("{:.2} s", *html_duration as f64 / 1_000_000.0)
                         };
                         html! {
-                            <div class="text-[10px] font-mono text-gray-600 space-y-0.5 mt-1">
+                            <div class="text-xs font-mono text-gray-600 space-y-1 mt-1">
                                 <div class="flex justify-between">
                                     <span>{"Total Nodes:"}</span>
                                     <span>{*html_nodes_count}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>{"Max Depth:"}</span>
+                                    <span>{*html_depth}</span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span>{"Parsing Duration:"}</span>
@@ -433,7 +442,7 @@ pub fn LeftSection() -> Html {
                                     format!("{:.2} s", res.duration as f64 / 1_000_000.0)
                                 };
                                 html! {
-                                    <div class="text-[10px] font-mono text-gray-600 space-y-0.5 mt-1">
+                                    <div class="text-xs font-mono text-gray-600 space-y-1 mt-1">
                                         <div class="flex justify-between">
                                             <span>{"Visited Count:"}</span>
                                             <span>{res.nodes_count}</span>
@@ -461,9 +470,31 @@ pub fn LeftSection() -> Html {
                             >
                                 {"submit button for try lca"}
                             </button>
-                            <div class="text-[10px] text-gray-500">
+                            <div class="text-xs text-gray-500 font-medium">
                                 {format!("Selected Nodes for LCA: {:?}", ctx.lca_selected)}
                             </div>
+                            
+                            {if let Some(res) = lca_result_data.first() {
+                                let duration_text = if res.duration < 1000 {
+                                    format!("{} µs", res.duration)
+                                } else if res.duration < 1_000_000 {
+                                    format!("{:.2} ms", res.duration as f64 / 1000.0)
+                                } else {
+                                    format!("{:.2} s", res.duration as f64 / 1_000_000.0)
+                                };
+                                html! {
+                                    <div class="text-xs font-mono text-gray-600 space-y-1 mt-1">
+                                        <div class="flex justify-between">
+                                            <span>{"Total Nodes Visited:"}</span>
+                                            <span>{res.nodes_count}</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span>{"Search Duration:"}</span>
+                                            <span>{duration_text}</span>
+                                        </div>
+                                    </div>
+                                }
+                            } else { html! {} }}
                             
                             <ResultPlayer 
                                 is_open={!lca_result_data.is_empty() && ctx.animation_type != crate::AnimationType::CSS} 

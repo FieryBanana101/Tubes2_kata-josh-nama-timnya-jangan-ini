@@ -27,6 +27,7 @@ pub struct BinaryLiftMetadata {
     ancestors               : Vec<Vec<usize>>,
     max_precompute_height   : usize,
     depth_map               : Vec<usize>, 
+    max_depth               : usize,
     id_to_node_map          : Vec<Node>,
     node_to_id_map          : HashMap<usize, usize>
 }
@@ -39,15 +40,18 @@ pub fn get_current_binary_lift_metadata() -> &'static Mutex<BinaryLiftMetadata> 
     CURRENT_BINARY_LIFT_METADATA.get().unwrap()
 }
 
-pub fn init_binary_lift_metadata(root: &Node) {
+pub fn init_binary_lift_metadata(root: &Node) -> usize {
 
-    let new_data = preprocess_tree(root);
+    let new_metadata = preprocess_tree(root);
+    let max_depth = new_metadata.max_depth;
 
-    if let Err(_) = CURRENT_BINARY_LIFT_METADATA.set(Mutex::new(new_data.clone())) {
+    if let Err(_) = CURRENT_BINARY_LIFT_METADATA.set(Mutex::new(new_metadata.clone())) {
         let mutex = CURRENT_BINARY_LIFT_METADATA.get().unwrap();
         let mut guard = mutex.lock().unwrap();
-        *guard = new_data;
+        *guard = new_metadata;
     }
+
+    max_depth
 }
 
 
@@ -69,6 +73,7 @@ pub fn preprocess_tree(root: &Node) -> BinaryLiftMetadata {
 
     /* Do DFS to do the afromentioned mapping */
     let mut counter = 0;
+    let mut max_depth = 0;
     stack.push((root.clone(), root.clone(), 0));
 
     while !stack.is_empty() {
@@ -83,6 +88,7 @@ pub fn preprocess_tree(root: &Node) -> BinaryLiftMetadata {
         node_to_id_map.insert(curr_ptr, counter);
 
         depth_map.push(curr_depth);
+        if max_depth < curr_depth { max_depth = curr_depth; }
 
         counter += 1;
 
@@ -127,7 +133,7 @@ pub fn preprocess_tree(root: &Node) -> BinaryLiftMetadata {
         }
     }
 
-    BinaryLiftMetadata { ancestors, max_precompute_height, depth_map, id_to_node_map, node_to_id_map }
+    BinaryLiftMetadata { ancestors, max_precompute_height, depth_map, max_depth, id_to_node_map, node_to_id_map }
 
 }
 
@@ -149,6 +155,7 @@ pub fn find_lca(node1: &Node, node2: &Node, metadata: &BinaryLiftMetadata) -> (N
         ancestors, 
         max_precompute_height,
         depth_map, 
+        max_depth,
         id_to_node_map, 
         node_to_id_map 
     } = metadata;
@@ -164,7 +171,7 @@ pub fn find_lca(node1: &Node, node2: &Node, metadata: &BinaryLiftMetadata) -> (N
     add_lca_path(x, id_to_node_map, &mut path_tracker[0]);
     add_lca_path(y, id_to_node_map, &mut path_tracker[1]);
 
-    log_tracker.push(format!("Beginning LCA Query for nodes ({}, {})", x, y));
+    log_tracker.push(format!("[LCA] Beginning LCA Query for nodes ({}, {})", x, y));
 
 
     /*  
@@ -187,14 +194,14 @@ pub fn find_lca(node1: &Node, node2: &Node, metadata: &BinaryLiftMetadata) -> (N
             add_lca_path(x, id_to_node_map, &mut path_tracker[0]);
             add_lca_path(y, id_to_node_map, &mut path_tracker[0]); // Add again for the 'y' so animation align
 
-            log_tracker.push(format!("Moving up to node {}", x));
+            log_tracker.push(format!("[LCA] Moving up to node {}", x));
         }
     }
 
 
     /* Check for the possiblity that one of them is already the LCA of the other */
     if x == y {
-        log_tracker.push(format!("Found result for current LCA query: {}", x));
+        log_tracker.push(format!("[LCA] Found result for current LCA query: {}", x));
         return (id_to_node_map[x].clone(), path_tracker, log_tracker);
     }
 
@@ -217,13 +224,13 @@ pub fn find_lca(node1: &Node, node2: &Node, metadata: &BinaryLiftMetadata) -> (N
             add_lca_path(x, id_to_node_map, &mut path_tracker[0]);
             add_lca_path(y, id_to_node_map, &mut path_tracker[1]);
 
-            log_tracker.push(format!("Moving up to node {}", x));
-            log_tracker.push(format!("Moving up to node {}", y));
+            log_tracker.push(format!("[LCA] Moving up to node {}", x));
+            log_tracker.push(format!("[LCA] Moving up to node {}", y));
         }
     }
     
     add_lca_path(ancestors[x][0], id_to_node_map, &mut path_tracker[0]);
-    log_tracker.push(format!("Found result for current LCA query: {}", ancestors[x][0]));
+    log_tracker.push(format!("[LCA] Found result for current LCA query: {}", ancestors[x][0]));
 
     let lca_result = id_to_node_map[ancestors[x][0]].clone();
 

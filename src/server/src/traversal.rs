@@ -148,7 +148,7 @@ pub fn async_traversal_base(
 
     let start_time = time::Instant::now();
 
-    for _thread_id in 0..core_num {
+    for thread_id in 0..core_num {
         /* Prepare each shared data structure for the threads, including the atomic counter*/
         let shared_task_stracker = Arc::clone(&async_tracker);
         let shared_filters = Arc::clone(&async_filters);
@@ -200,7 +200,8 @@ pub fn async_traversal_base(
                     break 'thread_loop;
                 }
                 path_tracker.push((parent_node.global_id, curr_node.global_id));
-                shared_logs.push("TEST LOG CSS".to_string());
+                shared_logs.push(format!("[CSS Query, Thread {}] Visiting node {} (attributes = {:?}) with parent node {} (attributes = {:?})", 
+                    thread_id + 1, curr_node.global_id, curr_node.attributes, parent_node.global_id, parent_node.attributes));
 
                 /* Determine whether the current CSS selector and DOM node described by the task match */
                 let filter_list = shared_filters.get(selector_list_idx)
@@ -215,8 +216,13 @@ pub fn async_traversal_base(
                         .match_node(&curr_node, node_child_pos, &parent_node);
 
                 if node_match_filter {
+
+                    shared_logs.push(format!("[CSS Query, Thread {}] Node {} (attributes = {:?}) matches with selector unit ({:?})", thread_id + 1, curr_node.global_id, curr_node.attributes, filter));
+
                     /* If there are no more selector unit to match from the CSS selector list */
                     if selector_unit_idx + 1 == filter_list.len() {
+
+                        shared_logs.push(format!("[CSS Query, Thread {}] Node {} (attributes = {:?}) matches the full CSS query criteria", thread_id + 1, curr_node.global_id, curr_node.attributes));
 
                         /* The current node match the css selector but check the ID tracker to avoid duplicate result */
                         let curr_node_raw_ptr = Arc::into_raw(curr_node.clone()) as usize;
@@ -339,6 +345,9 @@ pub fn async_traversal_base(
                         }
                     };
                 } else {
+
+                    shared_logs.push(format!("[CSS Query, Thread {}] Node {} (attributes = {:?}) differs with selector unit ({:?})", thread_id + 1, curr_node.global_id, curr_node.attributes, filter));
+
                     /*
                         If the current DOM Node and CSS selector unit does not match,
                         propagate the current CSS selector unit to the children or next sibling accordingly.
@@ -440,8 +449,11 @@ pub fn async_dfs(
     
     let result = result.get_vec().ok_or("Unable to get traversal result")?;
     let path_result = path_result.ok_or("Unable to get full path result from traversal")?;
-    let logs = logs.get_vec().ok_or("Unable to get logs of traversal")?;
-    
+    let mut traversal_log = logs.get_vec().ok_or("Unable to get logs of traversal")?;
+
+    let mut logs = vec![format!("[CSS] Starting DFS traversal for query: \"{}\"", css_query)];
+    logs.append(&mut traversal_log);
+
     Ok((result, path_result, nodes_count, duration, logs))
 }
 
@@ -475,8 +487,11 @@ pub fn async_bfs(
 
     let result = result.get_vec().ok_or("Unable to get traversal result")?;
     let path_result = path_result.ok_or("Unable to get full path result from traversal")?;
-    let logs = logs.get_vec().ok_or("Unable to get logs of traversal")?;
+    let mut traversal_log = logs.get_vec().ok_or("Unable to get logs of traversal")?;
     
+    let mut logs = vec![format!("[CSS] Starting BFS traversal for query: \"{}\"", css_query)];
+    logs.append(&mut traversal_log);
+
     Ok((result, path_result, nodes_count, duration, logs))
 }
 

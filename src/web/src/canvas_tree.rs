@@ -130,7 +130,7 @@ pub fn CanvasTree() -> Html {
     html! {
         <div
             id={TREE_CONTAINER_ID}
-            class="h-screen w-screen w-full overflow-hidden"
+            class="h-screen w-screen w-full overflow-hidden bg-[#f0f2f5]"
             onwheel={onwheel}
         ></div>
     }

@@ -47,6 +47,7 @@ pub struct HtmlQueryResponse {
     pub nodes: HashMap<usize, ResponseNode>,
     pub root_index: usize,
     pub nodes_count: usize,
+    pub depth: usize,
     pub duration: u128,
     pub logs: Vec<String>,
     pub err: String
@@ -127,7 +128,7 @@ async fn process_query_html(body: QueryPostBody) -> HttpResponse {
             let mut tree_mutex = get_current_tree().lock().unwrap();
             *tree_mutex = Arc::clone(&root);
 
-            init_binary_lift_metadata(&TokenizerNode::Element(root.clone()));
+            let depth = init_binary_lift_metadata(&TokenizerNode::Element(root.clone()));
 
             let mut nodes = HashMap::new();
             map_id_to_node(&root, &mut nodes);
@@ -136,6 +137,7 @@ async fn process_query_html(body: QueryPostBody) -> HttpResponse {
                 root_index: root.global_id,
                 nodes,
                 nodes_count,
+                depth,
                 duration,
                 logs: vec![format!("Successfully parsed HTML with {} nodes", nodes_count)],
                 err: "".to_string()
@@ -146,6 +148,7 @@ async fn process_query_html(body: QueryPostBody) -> HttpResponse {
                 root_index: 0,
                 nodes: HashMap::new(),
                 nodes_count: 0,
+                depth: 0,
                 duration: 0,
                 logs: Vec::new(),
                 err: e
