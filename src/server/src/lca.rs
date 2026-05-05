@@ -1,5 +1,6 @@
 use std::sync::{Arc, OnceLock, Mutex};
 use std::collections::HashMap;
+use crate::async_util::id_to_node;
 use crate::html::{Node, Element};
 
 
@@ -133,7 +134,15 @@ pub fn preprocess_tree(root: &Node) -> BinaryLiftMetadata {
 
 
 
-pub fn find_lca(node1: &Node, node2: &Node, metadata: &BinaryLiftMetadata) -> Node {
+fn add_lca_path(local_binary_lift_id: usize, id_to_node_map: &Vec<Node>, path_tracker: &mut Vec<(usize, usize)>) {
+    let node = id_to_node_map[local_binary_lift_id].clone();
+    if let Node::Element(element) = node {
+        path_tracker.push((element.global_id, element.global_id));
+    }
+}
+
+
+pub fn find_lca(node1: &Node, node2: &Node, metadata: &BinaryLiftMetadata) -> (Node, Vec<Vec<(usize, usize)>>, Vec<String>) {
 
     /* Acquire metadata from binary lift pre-processing */
     let BinaryLiftMetadata { 
@@ -144,10 +153,18 @@ pub fn find_lca(node1: &Node, node2: &Node, metadata: &BinaryLiftMetadata) -> No
         node_to_id_map 
     } = metadata;
 
+    let mut path_tracker: Vec<Vec<(usize, usize)>> = vec![Vec::new(), Vec::new()]; // We will only use two concurrent animation for each LCA sequence
+    let mut log_tracker: Vec<String> = Vec::new();
+
 
     /* Map the actual node pointer into its corresponding ID */
     let mut x = node_to_id_map[&node_ptr_to_usize(node1.clone())];
     let mut y = node_to_id_map[&node_ptr_to_usize(node2.clone())];
+
+    add_lca_path(x, id_to_node_map, &mut path_tracker[0]);
+    add_lca_path(y, id_to_node_map, &mut path_tracker[1]);
+
+    log_tracker.push(format!("Beginning LCA Query for nodes ({}, {})", x, y));
 
 
     /*  
@@ -167,13 +184,18 @@ pub fn find_lca(node1: &Node, node2: &Node, metadata: &BinaryLiftMetadata) -> No
     for i in (0 .. *max_precompute_height).rev() {
         if (k & (1 << i)) != 0 {
             x = ancestors[x][i];
+            add_lca_path(x, id_to_node_map, &mut path_tracker[0]);
+            add_lca_path(y, id_to_node_map, &mut path_tracker[0]); // Add again for the 'y' so animation align
+
+            log_tracker.push(format!("Moving up to node {}", x));
         }
     }
 
 
     /* Check for the possiblity that one of them is already the LCA of the other */
     if x == y {
-        return id_to_node_map[x].clone();
+        log_tracker.push(format!("Found result for current LCA query: {}", x));
+        return (id_to_node_map[x].clone(), path_tracker, log_tracker);
     }
 
 
@@ -192,10 +214,20 @@ pub fn find_lca(node1: &Node, node2: &Node, metadata: &BinaryLiftMetadata) -> No
         if ancestors[x][i] != ancestors[y][i] {
             x = ancestors[x][i];
             y = ancestors[y][i];
+            add_lca_path(x, id_to_node_map, &mut path_tracker[0]);
+            add_lca_path(y, id_to_node_map, &mut path_tracker[1]);
+
+            log_tracker.push(format!("Moving up to node {}", x));
+            log_tracker.push(format!("Moving up to node {}", y));
         }
     }
     
-    return id_to_node_map[ancestors[x][0]].clone();
+    add_lca_path(ancestors[x][0], id_to_node_map, &mut path_tracker[0]);
+    log_tracker.push(format!("Found result for current LCA query: {}", ancestors[x][0]));
+
+    let lca_result = id_to_node_map[ancestors[x][0]].clone();
+
+    return (lca_result, path_tracker, log_tracker);
 }
 
 
@@ -234,7 +266,7 @@ mod tests {
         let meta = preprocess_tree(&root);
         
         /* LCA(n5, n2) = n2 */
-        let res1 = find_lca(&n5, &n2, &meta);
+        let (res1, _, _) = find_lca(&n5, &n2, &meta);
         if let Node::Element(el) = res1 { assert_eq!(el.tag, "n2"); }
 
 
@@ -257,23 +289,23 @@ mod tests {
         let meta2 = preprocess_tree(&root2);
 
         /* LCA(s1, s2) = div1 */
-        let res2: Node = find_lca(&s1, &s2, &meta2);
+        let (res2, _, _) = find_lca(&s1, &s2, &meta2);
         if let Node::Element(el) = res2 { assert_eq!(el.tag, "div1"); }
 
         /* LCA(s1, s4) = root */
-        let res3 = find_lca(&s1, &s4, &meta2);
+        let (res3, _, _) = find_lca(&s1, &s4, &meta2);
         if let Node::Element(el) = res3 { assert_eq!(el.tag, "root"); }
 
         /* LCA(txt1, s3) = root */
-        let res4 = find_lca(&s3, &txt1, &meta2);
+        let (res4, _, _) = find_lca(&s3, &txt1, &meta2);
         if let Node::Element(el) = res4 { assert_eq!(el.tag, "root"); }
 
         /* LCA(s4, s4) = s4 */
-        let res5 = find_lca(&s4, &s4, &meta2);
+        let (res5, _, _) = find_lca(&s4, &s4, &meta2);
         if let Node::Element(el) = res5 { assert_eq!(el.tag, "s4"); }
 
         /* LCA(txt1, txt1) = txt1 */
-        let res6 = find_lca(&txt1, &txt1, &meta2);
+        let (res6, _, _) = find_lca(&txt1, &txt1, &meta2);
         if let Node::Text(text) = res6 { assert_eq!(*text, "I am a sibling"); }
 
 
@@ -286,7 +318,7 @@ mod tests {
         let meta3 = preprocess_tree(&root3);
 
         /* LCA(chilld0, child99) = root */
-        let res6 = find_lca(&children[0], &children[99], &meta3);
+        let (res6, _, _) = find_lca(&children[0], &children[99], &meta3);
         if let Node::Element(el) = res6 { assert_eq!(el.tag, "root"); }
 
 
@@ -304,11 +336,11 @@ mod tests {
         let meta = preprocess_tree(&root);
 
         /*  LCA(d, e) -> root */
-        let res = find_lca(&d, &e, &meta);
+        let (res, _, _) = find_lca(&d, &e, &meta);
         if let Node::Element(el) = res { assert_eq!(el.tag, "root"); }
         
         /*  LCA(d, b) -> b */
-        let res2 = find_lca(&d, &b, &meta);
+        let (res2, _, _) = find_lca(&d, &b, &meta);
         if let Node::Element(el) = res2 { assert_eq!(el.tag, "b"); }
 
         

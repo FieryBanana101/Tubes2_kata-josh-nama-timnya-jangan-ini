@@ -22,16 +22,9 @@ struct QueryPostBody {
 struct HtmlQueryResponse {
     nodes_count: usize,
     duration: u128,
-}
-
-#[derive(Deserialize)]
-struct CSSQueryResponse {
-    results: Vec<ResultItem>,
-}
-
-#[derive(Deserialize)]
-struct LCAQueryResponse {
-    results: Vec<ResultItem>,
+    logs: Vec<String>,
+    #[serde(default)]
+    pub err: String,
 }
 
 #[component]
@@ -134,8 +127,13 @@ pub fn LeftSection() -> Html {
                         if res.ok() {
                             let response_text = res.text().await.unwrap();
                             if let Ok(parsed) = serde_json::from_str::<HtmlQueryResponse>(&response_text) {
+                                if !parsed.err.is_empty() {
+                                    alert(&parsed.err);
+                                    return;
+                                }
                                 html_nodes_count.set(parsed.nodes_count);
                                 html_duration.set(parsed.duration);
+                                ctx.dispatch(GraphAction::AddLogs(parsed.logs));
                             }
                             ctx.dispatch(GraphAction::SetGraphData(response_text));
                             html_submitted.set(true);
@@ -160,6 +158,7 @@ pub fn LeftSection() -> Html {
         let result_data = result_data.clone();
 
         Callback::from(move |_| {
+            let ctx = ctx.clone();
             if (*css_query).trim().is_empty() {
                 alert("CSS query is empty");
                 return;
@@ -186,8 +185,15 @@ pub fn LeftSection() -> Html {
                 match res {
                     Ok(res) => {
                         if res.ok() {
-                            match res.json::<CSSQueryResponse>().await {
-                                Ok(response) => result_data.set(response.results),
+                            match res.json::<ResultItem>().await {
+                                Ok(response) => {
+                                    if !response.err.is_empty() {
+                                        alert(&response.err);
+                                        return;
+                                    }
+                                    ctx.dispatch(GraphAction::AddLogs(response.logs.clone()));
+                                    result_data.set(vec![response]);
+                                },
                                 Err(e) => alert(&format!("Failed to parse response: {}", e)),
                             }
                         } else {
@@ -205,6 +211,7 @@ pub fn LeftSection() -> Html {
         let ctx = ctx.clone();
         let lca_result_data = lca_result_data.clone();
         Callback::from(move |_| {
+            let ctx = ctx.clone();
             let lca_nodes = ctx.lca_selected.clone();
             
             if lca_nodes.is_empty() {
@@ -235,8 +242,15 @@ pub fn LeftSection() -> Html {
                 match res {
                     Ok(res) => {
                         if res.ok() {
-                            match res.json::<LCAQueryResponse>().await {
-                                Ok(response) => lca_result_data.set(response.results),
+                            match res.json::<ResultItem>().await {
+                                Ok(response) => {
+                                    if !response.err.is_empty() {
+                                        alert(&response.err);
+                                        return;
+                                    }
+                                    ctx.dispatch(GraphAction::AddLogs(response.logs.clone()));
+                                    lca_result_data.set(vec![response]);
+                                },
                                 Err(e) => alert(&format!("Failed to parse response: {}", e)),
                             }
                         } else {

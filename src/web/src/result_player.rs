@@ -34,6 +34,9 @@ pub struct ResultItem {
     pub selected: Vec<usize>,
     pub duration: u128,
     pub nodes_count: usize,
+    pub logs: Vec<String>,
+    #[serde(default)]
+    pub err: String,
 }
 
 #[derive(Properties, PartialEq)]

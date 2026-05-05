@@ -19,18 +19,6 @@ pub struct Element {
     pub children: Vec<Node>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TokenizerStep {
-    pub step_type: String,
-    pub tag: Option<String>,
-    pub position: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TokenizerTraversal {
-    pub steps: Vec<TokenizerStep>,
-}
-
 
 
 fn closes_tag(current: &str, incoming: &str) -> bool {
@@ -90,7 +78,7 @@ const VOID_TAGS: &[&str] = &[
 const HEAD_TAGS: &[&str] = &[
     "title", "base", "link", "style", "meta", "script", "noscript", "template",
 ];
-pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal, usize, u128), String> {
+pub fn parser(html: &str) -> Result<(Arc<Element>, usize, u128), String> {
     let mut output = "".to_string();
     let mut stack: Vec<Element> = Vec::new();
     let mut head_read = false;
@@ -102,7 +90,6 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal, usize, u1
         children: Vec::new(),
     };
 
-    let mut traversal = TokenizerTraversal { steps: Vec::new() };
     let mut position = 0;
     let start_time = time::Instant::now();
     
@@ -172,11 +159,6 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal, usize, u1
 
                 if tag.self_closing || VOID_TAGS.contains(&tag_string.as_str()) {
 
-                    traversal.steps.push(TokenizerStep {
-                        step_type: "start_tag".to_string(),
-                        tag: Some(tag_string.clone()),
-                        position,
-                    });
                     position += 1;
 
                     let mut new_node = Element {
@@ -199,11 +181,6 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal, usize, u1
                     output.push_str(&format!("SelfClosingToken({})\n", tag_string));
                 } else {
 
-                    traversal.steps.push(TokenizerStep {
-                        step_type: "start_tag".to_string(),
-                        tag: Some(tag_string.clone()),
-                        position,
-                    });
                     position += 1;
 
                     let mut new_node = Element {
@@ -226,11 +203,6 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal, usize, u1
             Token::EndTag(tag) => {
                 let tag_string = htmlstring_to_string(&tag.name);
 
-                traversal.steps.push(TokenizerStep {
-                    step_type: "end_tag".to_string(),
-                    tag: Some(tag_string.clone()),
-                    position,
-                });
                 position += 1;
 
                 if let Some(pos) = stack.iter().position(|x| &x.tag == &tag_string) {
@@ -261,11 +233,6 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal, usize, u1
                     continue;
                 }
 
-                traversal.steps.push(TokenizerStep {
-                    step_type: "text".to_string(),
-                    tag: Some(tag_string.clone()),
-                    position,
-                });
                 position += 1;
 
                 if let Some(parent) = stack.last_mut() {
@@ -278,7 +245,7 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal, usize, u1
             }
             Token::Comment(tag) => {}
             Token::Doctype(_) => {}
-            other => panic!("unexpected input: {:?}", other),
+            other => return Err(format!("unexpected input: {:?}", other)),
         }
     }
     // html file stopped with unclosed StartTag
@@ -294,7 +261,7 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, TokenizerTraversal, usize, u1
 
     let duration = start_time.elapsed().as_micros();
 
-    Ok((Arc::new(root), traversal, global_id_counter, duration))
+    Ok((Arc::new(root), global_id_counter, duration))
 }
 
 

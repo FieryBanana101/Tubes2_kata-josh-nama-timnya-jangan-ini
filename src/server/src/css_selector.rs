@@ -103,12 +103,12 @@ impl<'a> CssSelectorParser<'a> {
         this is made to make it easier for some circumstances where we need the entire parsed selector,
         instead of advancing one-by-one
      */
-    pub fn parse_all(&mut self) -> Vec<NodeFilter> {
+    pub fn parse_all(&mut self) -> Result<Vec<NodeFilter>, String> { 
 
         let mut vec: Vec<NodeFilter> = Vec::new();      
 
         loop {
-            let (filter, is_eof) = self.advance().unwrap();
+            let (filter, is_eof) = self.advance()?;
             vec.push(filter);
 
             if is_eof {
@@ -116,7 +116,7 @@ impl<'a> CssSelectorParser<'a> {
             }
         };
 
-        vec
+        Ok(vec)
     }
 
 
