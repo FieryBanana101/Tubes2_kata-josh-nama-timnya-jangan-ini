@@ -1,58 +1,56 @@
-use std::sync::{Arc};
 use std::marker::{Send, Sync};
-use std::thread;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time;
+use std::collections::HashSet;
 
-use crate::tokenizer::{parser, Node, Element};
-use crate::css_selector::*;
 use crate::async_util::*;
+use crate::css_selector::*;
+use crate::html::{parser, Element, Node};
 
-
-/* 
+/*
     Push all children of the current node into the global task pool,
     the task which is given to the children will be pointed by filter_idx as index from the CSS Selector Unit list,
     optionally we can enter the previous task accordingly and depth can be set relative to the curr_node depth.
 */
 fn push_all_children<T: AsyncTraversalTracker<ThreadTask>>(
     task_tracker: &Arc<T>,
-    curr_node: &Arc<Element>, 
-    curr_depth: usize, 
+    curr_node: &Arc<Element>,
+    curr_depth: usize,
     selector_list_idx: usize,
-    selector_unit_idx:usize, 
-    add_prev_filter: bool
-){
-
-    for (idx, node) in (&curr_node).children.iter().enumerate().rev() {
-
+    selector_unit_idx: usize,
+    add_prev_filter: bool,
+    reversed: bool
+) {
+    let iter  = (&curr_node).children.iter().enumerate();
+    let rev_iter = (&curr_node).children.iter().enumerate().rev();
+    let children: Vec<(usize, &Node)> = if reversed { rev_iter.collect() } else { iter.collect() };
+    
+    for (idx, node) in children {
         if let Node::Element(child) = node {
-            
-            task_tracker.push(ThreadTask{
+            task_tracker.push(ThreadTask {
                 curr_node: child.clone(),
                 node_child_pos: idx,
                 parent_node: curr_node.clone(),
                 selector_list_idx: selector_list_idx,
                 selector_unit_idx: selector_unit_idx,
-                depth: curr_depth + 1
+                depth: curr_depth + 1,
             });
 
             if add_prev_filter {
-                task_tracker.push(ThreadTask{
+                task_tracker.push(ThreadTask {
                     curr_node: child.clone(),
                     node_child_pos: idx,
                     parent_node: curr_node.clone(),
                     selector_list_idx: selector_list_idx,
                     selector_unit_idx: selector_unit_idx - 1,
-                    depth: curr_depth + 1
+                    depth: curr_depth + 1,
                 });
             }
-            
         }
-
     }
-
 }
-
-
 
 /*
     Push the next sibling from a certain DOM Node into the global task pool,
@@ -61,86 +59,78 @@ fn push_all_children<T: AsyncTraversalTracker<ThreadTask>>(
     optionally we can enter the previous task accordingly and depth can be set relative to the curr_node depth.
 */
 fn push_next_sibling<T: AsyncTraversalTracker<ThreadTask>>(
-    task_tracker: &Arc<T>, 
-    parent_node: &Arc<Element>, 
-    curr_child_idx: usize, 
-    curr_depth: usize, 
+    task_tracker: &Arc<T>,
+    parent_node: &Arc<Element>,
+    curr_child_idx: usize,
+    curr_depth: usize,
     selector_list_idx: usize,
-    selector_unit_idx: usize, 
-    add_prev_filter: bool
-){
-
+    selector_unit_idx: usize,
+    add_prev_filter: bool,
+) {
     let next_sibling = parent_node.children.get(curr_child_idx + 1);
     if !next_sibling.is_none() {
+        let pushed_node = if let Some(Node::Element(node)) = next_sibling {
+            node.clone()
+        } else {
+            unreachable!()
+        };
 
-        let pushed_node = if let Some(Node::Element(node)) = next_sibling { node.clone() } else { unreachable!() };
-
-        task_tracker.push(ThreadTask{
+        task_tracker.push(ThreadTask {
             curr_node: pushed_node.clone(),
             node_child_pos: curr_child_idx + 1,
             parent_node: parent_node.clone(),
             selector_list_idx: selector_list_idx,
             selector_unit_idx: selector_unit_idx,
-            depth: curr_depth
+            depth: curr_depth,
         });
 
         if add_prev_filter {
-            task_tracker.push(ThreadTask{
+            task_tracker.push(ThreadTask {
                 curr_node: pushed_node.clone(),
                 node_child_pos: curr_child_idx + 1,
                 parent_node: parent_node.clone(),
                 selector_list_idx: selector_list_idx,
                 selector_unit_idx: selector_unit_idx,
-                depth: curr_depth
+                depth: curr_depth,
             });
         }
-        
     }
-
 }
-
-
 
 /*
     Main base for asynchronous traversal in a DOM tree to match a CSS selector, will panic when error are encountered.
     This function can be called by giving the html and css query, number of thread to use, and the data structure to be used as global task pool (must be thread safe).
-    
-    TODO: return an error message instead of panicking
 */
 pub fn async_traversal_base(
-    html_text: &str, 
-    css_query: &str, 
-    core_num: usize, 
-    async_tracker: impl AsyncTraversalTracker<ThreadTask> + Send + Sync + 'static
-) -> AsyncVec<Arc<Element>> {
-
-    /* Parse the html text */
-    let tree: Arc<Element> = parser(html_text).expect("Failed to parse HTML");
-
+    tree: Arc<Element>,
+    css_query: &str,
+    core_num: usize,
+    async_tracker: impl AsyncTraversalTracker<ThreadTask> + Send + Sync + 'static,
+    reversed: bool,
+    limit: usize
+) -> Result<(AsyncVec<Arc<Element>>, AsyncVec<Vec<(usize, usize)>>, u128, AsyncVec<String>), String>
+{
 
     /* Parse and prepare the css selector list */
     let mut css_filters: Vec<Vec<NodeFilter>> = Vec::new();
     let complex_selector_list: Vec<&str> = css_query.split(',').collect();
     for complex_selector in complex_selector_list {
-
-        let css_filter: Vec<NodeFilter> = CssSelectorParser::new(complex_selector, false).parse_all();
+        let css_filter: Vec<NodeFilter> =
+            CssSelectorParser::new(complex_selector, false).parse_all()?;
         css_filters.push(css_filter);
-
     }
 
-    let async_filters: Arc<Vec<Vec<NodeFilter>>>  = Arc::new(css_filters);
-
+    let async_filters: Arc<Vec<Vec<NodeFilter>>> = Arc::new(css_filters);
 
     /* Prepare asyncrhonous global task pool, atomic counter for number of active thread, and thread list */
-    let atomic_counter: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
-    let mut threads: Vec<thread::JoinHandle<()>> = vec![];
+    let thread_counter: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+    let matched_counter: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+    let mut threads: Vec<thread::JoinHandle<Result<(), String>>> = vec![];
     let async_tracker = Arc::new(async_tracker);
 
-
     /* Start traversal by pushing the root for each css selector unit to the global task pool */
-    for (idx, _) in async_filters.iter().enumerate(){
-
-        async_tracker.push(ThreadTask { 
+    for (idx, _) in async_filters.iter().enumerate() {
+        async_tracker.push(ThreadTask {
             curr_node: Arc::clone(&tree),
             node_child_pos: 0,
             parent_node: Arc::clone(&tree),
@@ -148,36 +138,43 @@ pub fn async_traversal_base(
             selector_unit_idx: 0,
             depth: 0,
         });
-
     }
 
-
     /* Prepare the result vector and global node id tracker to avoid duplication in result */
-    let result:Arc<AsyncVec<Arc<Element>>>  = Arc::new(AsyncVec::<Arc<Element>>::new());
+    let result: Arc<AsyncVec<Arc<Element>>> = Arc::new(AsyncVec::<Arc<Element>>::new());
     let id_tracker: Arc<AsyncHashSet<usize>> = Arc::new(AsyncHashSet::<usize>::new());
+    let path_tracker_list: Arc<AsyncVec<Vec<(usize, usize)>>> = Arc::new(AsyncVec::<Vec<(usize, usize)>>::new());
+    let log_tracker: Arc<AsyncVec<String>> = Arc::new(AsyncVec::<String>::new());
 
-    for _thread_id in 0..core_num {
-        
+    let start_time = time::Instant::now();
+
+    for thread_id in 0..core_num {
         /* Prepare each shared data structure for the threads, including the atomic counter*/
         let shared_task_stracker = Arc::clone(&async_tracker);
         let shared_filters = Arc::clone(&async_filters);
         let shared_result = Arc::clone(&result);
         let shared_dup_tracker = Arc::clone(&id_tracker);
-        let active_threads_count = Arc::clone(&atomic_counter);
+        let shared_path_tracker_list = Arc::clone(&path_tracker_list);
+        let shared_logs = Arc::clone(&log_tracker);
+        let active_threads_count = Arc::clone(&thread_counter);
+        let matched_count = Arc::clone(&matched_counter);
 
-        let thread = thread::spawn(move || {
-            
+        let thread: thread::JoinHandle<Result<(), String>> = thread::spawn(move || -> Result<(), String> {
+            let mut path_tracker: Vec<(usize, usize)>= Vec::new();
             'thread_loop: loop {
-
-                /* 
+                /*
                     Currently, this thread is inactive, it will try to get a task from the global task pool (will busy wait until found).
-                    A thread is considered done only when global task pool is empty and 
+                    A thread is considered done only when global task pool is empty and
                     number of active thread is zero (i.e. no thread is doing any task)
                 */
                 let mut task = shared_task_stracker.pop();
-
+                
                 while task.is_none() {
-                    if active_threads_count.load(Ordering::SeqCst) == 0 {
+                    if active_threads_count.load(Ordering::SeqCst) == 0 || 
+                        (limit != 0 && matched_count.load(Ordering::SeqCst) >= limit) 
+                    {
+                        path_tracker.sort();
+                        shared_path_tracker_list.push(path_tracker);
                         break 'thread_loop;
                     }
                     task = shared_task_stracker.pop();
@@ -185,222 +182,320 @@ pub fn async_traversal_base(
 
                 /* When a task is acquired, consider this thread as active */
                 active_threads_count.fetch_add(1, Ordering::SeqCst);
-                 
-                let ThreadTask { 
-                    curr_node, 
+
+                let ThreadTask {
+                    curr_node,
                     node_child_pos,
-                    parent_node, 
+                    parent_node,
                     selector_list_idx,
                     selector_unit_idx,
-                    depth
+                    depth,
                 } = task.unwrap();
-
                 
+                
+                if limit != 0 && matched_count.load(Ordering::SeqCst) >= limit {
+                    path_tracker.sort();
+                    shared_path_tracker_list.push(path_tracker);
+                    active_threads_count.fetch_sub(1, Ordering::SeqCst);
+                    break 'thread_loop;
+                }
+                path_tracker.push((parent_node.global_id, curr_node.global_id));
+                shared_logs.push(format!("[CSS Query, Thread {}] Visiting node {} (attributes = {:?}) with parent node {} (attributes = {:?})", 
+                    thread_id + 1, curr_node.global_id, curr_node.attributes, parent_node.global_id, parent_node.attributes));
+
                 /* Determine whether the current CSS selector and DOM node described by the task match */
-                let filter_list = shared_filters.get(selector_list_idx).unwrap();
-                let filter = filter_list.get(selector_unit_idx).unwrap();
+                let filter_list = shared_filters.get(selector_list_idx)
+                    .ok_or(format!("Invalid css filter list index (idx = {})", selector_list_idx))?;
 
-                let node_match_filter = filter.selector.match_node(&curr_node, node_child_pos, &parent_node);
-                
+                let filter = filter_list.get(selector_unit_idx)
+                    .ok_or(format!("Invalid css selector unit index (idx = {})", selector_unit_idx))?;
+
+                let node_match_filter =
+                    filter
+                        .selector
+                        .match_node(&curr_node, node_child_pos, &parent_node);
+
                 if node_match_filter {
+
+                    shared_logs.push(format!("[CSS Query, Thread {}] Node {} (attributes = {:?}) matches with selector unit ({:?})", thread_id + 1, curr_node.global_id, curr_node.attributes, filter));
 
                     /* If there are no more selector unit to match from the CSS selector list */
                     if selector_unit_idx + 1 == filter_list.len() {
 
+                        shared_logs.push(format!("[CSS Query, Thread {}] Node {} (attributes = {:?}) matches the full CSS query criteria", thread_id + 1, curr_node.global_id, curr_node.attributes));
+
                         /* The current node match the css selector but check the ID tracker to avoid duplicate result */
                         let curr_node_raw_ptr = Arc::into_raw(curr_node.clone()) as usize;
                         if shared_dup_tracker.insert(curr_node_raw_ptr) {
-                            shared_result.push(curr_node.clone());
+                            if limit != 0 && matched_count.fetch_add(1, Ordering::SeqCst) >= limit {
+                                path_tracker.sort();
+                                shared_path_tracker_list.push(path_tracker);
+                                active_threads_count.fetch_sub(1, Ordering::SeqCst);
+                                break 'thread_loop;
+                            }
+                            else {
+                                shared_result.push(curr_node.clone());
+                            }
                         }
 
-                        /* 
-                            If the last combinator is a '>' or '~', 
-                            there are still possible match somewhere after this 
+                        /*
+                            If the last combinator is a '>' or '~',
+                            there are still possible match somewhere after this
                         */
                         match filter.prev_combinator {
-
                             None | Some(Combinator::Descendant) => {
                                 push_all_children(
                                     &shared_task_stracker,
-                                    &curr_node, 
-                                    depth, 
+                                    &curr_node,
+                                    depth,
                                     selector_list_idx,
-                                    selector_unit_idx, 
-                                    false);
-                            },
+                                    selector_unit_idx,
+                                    false,
+                                    reversed
+                                );
+                            }
 
                             Some(Combinator::NextSibling) => {
                                 push_next_sibling(
-                                    &shared_task_stracker, 
+                                    &shared_task_stracker,
                                     &parent_node,
-                                    node_child_pos, 
-                                    depth, 
+                                    node_child_pos,
+                                    depth,
                                     selector_list_idx,
-                                    selector_unit_idx, 
-                                    false);
-                            },
+                                    selector_unit_idx,
+                                    false,
+                                );
+                            }
 
                             _ => {}
                         };
 
                         active_threads_count.fetch_sub(1, Ordering::SeqCst);
                         continue 'thread_loop;
-
                     }
 
-
-                    /* 
-                        If there are still more selector unit to match from the CSS selector list, 
+                    /*
+                        If there are still more selector unit to match from the CSS selector list,
                         push new task either from the children or the next sibling accordingly,
                         based on the next combinator.
                     */
                     let next_filter = filter_list
-                        .get(selector_unit_idx + 1).expect("Inavlid css selector unit index for a filter list");
+                        .get(selector_unit_idx + 1)
+                        .ok_or(format!("Invalid css selector unit index (idx = {})", selector_unit_idx + 1))?;
 
-                    let next_combinator = next_filter.prev_combinator.as_ref().expect("Unexpected None value Combinator");
+                    let next_combinator = next_filter
+                        .prev_combinator
+                        .as_ref()
+                        .ok_or("Unexpected None value Combinator")?;
 
                     match next_combinator {
-
-                        Combinator::Child if filter.prev_combinator.as_ref().is_none_or(|val| *val == Combinator::Descendant) => { 
+                        Combinator::Child
+                            if filter
+                                .prev_combinator
+                                .as_ref()
+                                .is_none_or(|val| *val == Combinator::Descendant) =>
+                        {
                             push_all_children(
-                                &shared_task_stracker, 
+                                &shared_task_stracker,
                                 &curr_node,
-                                depth, 
+                                depth,
                                 selector_list_idx,
-                                selector_unit_idx + 1, 
-                                true);
-                        },
-
-                        Combinator::Descendant | Combinator::Child => { 
-                            push_all_children(
-                                &shared_task_stracker, 
-                                &curr_node,
-                                depth, 
-                                selector_list_idx,
-                                selector_unit_idx + 1, 
-                                false);
+                                selector_unit_idx + 1,
+                                true,
+                                reversed
+                            );
                         }
-                        
-                        Combinator::DirectNextSibling if filter.prev_combinator == Some(Combinator::NextSibling) => {
-                            push_next_sibling(
-                                &shared_task_stracker, 
-                                &parent_node, 
-                                node_child_pos, 
-                                depth, 
+
+                        Combinator::Descendant | Combinator::Child => {
+                            push_all_children(
+                                &shared_task_stracker,
+                                &curr_node,
+                                depth,
                                 selector_list_idx,
-                                selector_unit_idx + 1, 
-                                true);
-                        },
-                        
+                                selector_unit_idx + 1,
+                                false,
+                                reversed
+                            );
+                        }
+
+                        Combinator::DirectNextSibling
+                            if filter.prev_combinator == Some(Combinator::NextSibling) =>
+                        {
+                            push_next_sibling(
+                                &shared_task_stracker,
+                                &parent_node,
+                                node_child_pos,
+                                depth,
+                                selector_list_idx,
+                                selector_unit_idx + 1,
+                                true,
+                            );
+                        }
+
                         Combinator::NextSibling | Combinator::DirectNextSibling => {
                             push_next_sibling(
-                                &shared_task_stracker, 
-                                &parent_node, 
-                                node_child_pos, 
-                                depth, 
+                                &shared_task_stracker,
+                                &parent_node,
+                                node_child_pos,
+                                depth,
                                 selector_list_idx,
-                                selector_unit_idx + 1, 
-                                false);
+                                selector_unit_idx + 1,
+                                false,
+                            );
                         }
                     };
+                } else {
 
-                }
-                else {
-                    
-                    /* 
+                    shared_logs.push(format!("[CSS Query, Thread {}] Node {} (attributes = {:?}) differs with selector unit ({:?})", thread_id + 1, curr_node.global_id, curr_node.attributes, filter));
+
+                    /*
                         If the current DOM Node and CSS selector unit does not match,
                         propagate the current CSS selector unit to the children or next sibling accordingly.
                         We only consider this when the previous combinator is '>' or '~'.
                     */
                     match filter.prev_combinator {
-                        
                         Some(Combinator::Descendant) | None => {
                             push_all_children(
-                                &shared_task_stracker, 
+                                &shared_task_stracker,
                                 &curr_node,
-                                depth, 
+                                depth,
                                 selector_list_idx,
-                                selector_unit_idx, 
-                                false);
-                        },
-
+                                selector_unit_idx,
+                                false,
+                                reversed
+                            );
+                        }
 
                         Some(Combinator::NextSibling) => {
                             push_next_sibling(
-                                &shared_task_stracker, 
-                                &parent_node, 
-                                node_child_pos, 
-                                depth, 
+                                &shared_task_stracker,
+                                &parent_node,
+                                node_child_pos,
+                                depth,
                                 selector_list_idx,
-                                selector_unit_idx, 
-                                false);
-                        },
+                                selector_unit_idx,
+                                false,
+                            );
+                        }
 
                         _ => {}
                     }
-
                 }
 
-                
                 active_threads_count.fetch_sub(1, Ordering::SeqCst);
             }
-
+            Ok(())
         });
-
 
         threads.push(thread);
     }
 
-
     /* Join all threads which have been spawned */
+    let mut join_result: Result<(), String> = Ok(());
     for thread in threads {
-        thread.join().expect("Failed to join threads");
-    };
+        join_result = thread.join().expect("Failed to join threads");
+    }
+    match join_result {
+        Err(e) => return Err(e),
+        _ => {}
+    }
 
-    /* Return the result vector of DOM Node which matches the CSS Selector Unit list */
-    Arc::into_inner(result).expect("Tried to return traversal result before all threads are finished.")
+    /* Measure execution time */
+    let result = Arc::into_inner(result)
+        .ok_or("Tried to return traversal result before all threads are finished.")?;
+
+    let path_tracker_list = Arc::into_inner(path_tracker_list)
+        .ok_or("Tried to return path tracker result before all threads are finished.")?;
+
+    let duration = start_time.elapsed().as_micros();
+
+    let log_tracker = Arc::into_inner(log_tracker)
+        .ok_or("Unable to record logs on async traversal")?;
+
+    /* Return the result vector of DOM Node which matches the CSS Selector Unit list and path of each thread */
+    Ok((result, path_tracker_list, duration, log_tracker))
 
 }
-
 
 
 /*
     Asynchronous DFS traversal to find matching DOM Node.
     This function is only a wrapper for the main traversal function.
 */
-pub fn async_dfs(html_text: &str,  css_query: &str, thread_num: usize) -> Option<Vec<Arc<Element>>> {
+pub fn async_dfs(
+    root: Arc<Element>, 
+    css_query: &str, 
+    thread_num: usize, 
+    limit: usize
+) -> Result<(Vec<Arc<Element>>, Vec<Vec<(usize, usize)>>, usize, u128, Vec<String>), String>
+{
+    let (result, path_tracker, duration, logs) = async_traversal_base(
+        root,
+        css_query,
+        thread_num,
+        AsyncStack::<ThreadTask>::new(),
+        true,
+        limit
+    )?;
 
-    let result: AsyncVec<Arc<Element>> = async_traversal_base(
-        html_text, 
-        css_query, 
-        thread_num, 
-        AsyncStack::<ThreadTask>::new()
-    );
+    let path_result = path_tracker.get_vec();
+    let nodes_count = if let Some(paths) = &path_result {
+        paths.iter().flatten().collect::<HashSet<_>>().len()
+    }
+    else { 
+        0 
+    }; 
 
-    result.get_vec()
+    
+    let result = result.get_vec().ok_or("Unable to get traversal result")?;
+    let path_result = path_result.ok_or("Unable to get full path result from traversal")?;
+    let mut traversal_log = logs.get_vec().ok_or("Unable to get logs of traversal")?;
+
+    let mut logs = vec![format!("[CSS] Starting DFS traversal for query: \"{}\"", css_query)];
+    logs.append(&mut traversal_log);
+
+    Ok((result, path_result, nodes_count, duration, logs))
 }
-
-
 
 /*
     Asynchronous BFS traversal to find matching DOM Node.
     This function is only a wrapper for the main traversal function.
 */
-pub fn async_bfs(html_text: &str,  css_query: &str, thread_num: usize) -> Option<Vec<Arc<Element>>> {
-    let result: AsyncVec<Arc<Element>> = async_traversal_base(
-        html_text, 
+pub fn async_bfs(
+    root: Arc<Element>, 
+    css_query: &str, 
+    thread_num: usize, 
+    limit: usize
+) -> Result<(Vec<Arc<Element>>, Vec<Vec<(usize, usize)>>, usize, u128, Vec<String>), String>
+{
+    let (result, path_tracker, duration, logs) = async_traversal_base(
+        root,
         css_query,
-        thread_num, 
-        AsyncQueue::<ThreadTask>::new()
-    );
+        thread_num,
+        AsyncQueue::<ThreadTask>::new(),
+        false,
+        limit
+    )?;
 
-    result.get_vec()
+    let path_result = path_tracker.get_vec();
+    let nodes_count = if let Some(paths) = &path_result {
+        paths.iter().flatten().collect::<HashSet<_>>().len()
+    }
+    else { 
+        0 
+    }; 
+
+    let result = result.get_vec().ok_or("Unable to get traversal result")?;
+    let path_result = path_result.ok_or("Unable to get full path result from traversal")?;
+    let mut traversal_log = logs.get_vec().ok_or("Unable to get logs of traversal")?;
+    
+    let mut logs = vec![format!("[CSS] Starting BFS traversal for query: \"{}\"", css_query)];
+    logs.append(&mut traversal_log);
+
+    Ok((result, path_result, nodes_count, duration, logs))
 }
 
-
-
-
-/* 
+/*
     Function to unit test our traversal result, test result are manually checked for now,
     Also see this function for reference on how to use the traversal function (async_dfs and async_bfs).
 
@@ -409,11 +504,10 @@ pub fn async_bfs(html_text: &str,  css_query: &str, thread_num: usize) -> Option
 #[cfg(test)]
 mod tests {
 
-    use super::*; 
+    use super::*;
 
     #[test]
-    fn test_traversal(){
-
+    fn test_traversal() {
         let html = r##"<!DOCTYPE html>
         <html lang="en">
         <head>
@@ -560,29 +654,26 @@ mod tests {
             r##"div:first-child, div:last-child"##,
         ];
 
-
         let core_num = thread::available_parallelism()
             .expect("Failed to get the number of CPU cores before a pure DFS traversal")
             .get();
 
+        let (tree, _, _) = parser(&html).unwrap();
 
         for (idx, selector_query) in testcases.iter().enumerate() {
             eprintln!("\n\n\n##### Traversal Test Case {} #####", idx);
 
-            let dfs_result: Vec<Arc<Element>> = async_dfs(&html, &selector_query, core_num)
-                .expect("DFS traversal result is None");
+            let (dfs_result, dfs_path, nodes_count, duration, logs) =
+                async_dfs(tree.clone(), &selector_query, core_num, 0).unwrap();
 
-            let bfs_result: Vec<Arc<Element>> = async_bfs(&html, &selector_query, core_num)
-                .expect("BFS traversal result is None");
-            
+            let (bfs_result, bfs_path, node_count, duration, logs) =
+                async_bfs(tree.clone(), &selector_query, core_num, 0).unwrap();
+
             dbg!(selector_query);
-            dbg!(dfs_result); eprintln!("\n");
+            dbg!(dfs_result);
+            dbg!(dfs_path);
+            eprintln!("\n");
             //dbg!(bfs_result);
         }
-
-
     }
 }
-
-
-

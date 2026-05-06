@@ -2,8 +2,54 @@
 <html>
     <head>
         <meta charset="utf-8" />
-        <title>Yew App</title>
+        <title>CSS Selector Visualizer</title>
 
+        <script>
+            function filter(event) {
+                event.preventDefault();
+                return (!event.ctrlKey || event.type === 'wheel') && !event.button;
+            }
+
+            function zoomed(event) {
+                const { transform } = event;
+                const zoomGroup = document.querySelector('.zoom-group');
+                if (zoomGroup) {
+                    zoomGroup.setAttribute('transform', transform);
+                }
+            }
+
+            function selectNode(idx) {
+                const nodeEl = document.querySelector('[data-index="' + idx + '"]');
+                if (!nodeEl) return;
+
+                const tag = nodeEl.getAttribute('data-tag') || 'unknown';
+                const cls = nodeEl.getAttribute('data-class') || '';
+                const id = nodeEl.getAttribute('data-id') || '';
+                const attrsStr = nodeEl.getAttribute('data-attributes') || '[]';
+
+                let attrsHtml = '';
+                try {
+                    const attrs = JSON.parse(attrsStr);
+                    for (const [key, val] of attrs) {
+                        attrsHtml += '<div style="white-space:nowrap;"><span class="font-mono">' + key + '</span>=<span class="font-mono">"' + val + '"</span></div>';
+                    }
+                } catch(e) {}
+
+                const detailsEl = document.getElementById('node-details');
+                if (detailsEl) {
+                    detailsEl.innerHTML = 
+                        '<div class="p-2 overflow-wrap">' +
+                            '<h3 class="text-lg font-bold mb-2">Node Information</h3>' +
+                            '<div class="mb-2"><span class="font-semibold">Tag: </span><span class="font-mono">&lt;' + tag + '&gt;</span></div>' +
+                            '<div class="mb-2"><span class="font-semibold">Index: </span><span>' + idx + '</span></div>' +
+                            '<div class="mb-2"><span class="font-semibold">Class: </span><span class="font-mono text-sm">' + (cls || '-') + '</span></div>' +
+                            '<div class="mb-2"><span class="font-semibold">ID: </span><span class="font-mono text-sm">' + (id || '-') + '</span></div>' +
+                            '<div class="mt-4"><span class="font-semibold">Attributes:</span></div>' +
+                            '<div>' + (attrsHtml || '<span class="text-gray-500">none</span>') + '</div>' +
+                        '</div>';
+                }
+            }
+        </script>
         <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
         <link data-trunk rel="tailwind-css" href="src/tailwind.css"/>
     </head>

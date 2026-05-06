@@ -23,6 +23,17 @@ pub fn call_method1(target: &JsValue, method: &str, arg: &JsValue) -> Result<JsV
         .map_err(|_| format!("Failed to call {method}."))
 }
 
+pub fn call_method2(target: &JsValue, method: &str, arg1: &JsValue, arg2: &JsValue) -> Result<JsValue, String> {
+    let method_value = Reflect::get(target, &JsValue::from_str(method))
+        .map_err(|_| format!("Missing method {method}."))?;
+    let function = method_value
+        .dyn_ref::<Function>()
+        .ok_or_else(|| format!("{method} is not callable."))?;
+    function
+        .call2(target, arg1, arg2)
+        .map_err(|_| format!("Failed to call {method}."))
+}
+
 pub fn get_string_field(target: &JsValue, key: &str) -> Option<String> {
     Reflect::get(target, &JsValue::from_str(key))
         .ok()

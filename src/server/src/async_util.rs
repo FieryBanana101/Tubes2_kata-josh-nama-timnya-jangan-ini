@@ -1,8 +1,40 @@
-use std::collections::{VecDeque, HashSet};
+use std::collections::{VecDeque, HashSet, HashMap};
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::sync::{Arc, Mutex};
-use crate::tokenizer::Element;
+use std::sync::{Arc, Mutex, OnceLock};
+use crate::html::Element;
+
+
+
+/* Shared global variable, for the current tree stored in the heap and a mapping from its global_id to the heap pointer */
+pub static CURRENT_TREE: OnceLock<Mutex<Arc<Element>>> = OnceLock::new();
+pub static ID_TO_NODE_MAP: OnceLock<Mutex<HashMap<usize, Arc<Element>>>> = OnceLock::new();
+
+
+pub fn get_current_tree() -> &'static Mutex<Arc<Element>> {
+    CURRENT_TREE.get_or_init(|| {
+        Mutex::new(
+            Arc::new(Element { global_id: 0, tag: "".to_string(), attributes: HashMap::new(), children: Vec::new()})
+        )
+    })
+}
+
+
+pub fn set_id_to_node_mapping(global_id: usize, element: Arc<Element>) {
+    let mut id_to_node_map =ID_TO_NODE_MAP.get_or_init(|| {
+        Mutex::new(
+            HashMap::new()
+        )
+    }).lock().unwrap();
+    
+    id_to_node_map.insert(global_id, element.clone());
+}
+
+
+pub fn id_to_node(global_id: usize) -> Arc<Element> {
+    let id_to_node_map = ID_TO_NODE_MAP.get().unwrap().lock().unwrap();
+    id_to_node_map[&global_id].clone()
+}
 
 
 /*

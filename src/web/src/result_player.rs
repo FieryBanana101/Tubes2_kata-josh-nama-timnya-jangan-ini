@@ -1,19 +1,17 @@
 use wasm_bindgen::JsCast;
-use web_sys::Element;
 use yew::prelude::*;
 use yew_hooks::use_interval;
+use serde::{Serialize, Deserialize};
 
-use crate::GraphContext;
+use crate::{GraphContext, GraphAction};
 
 const DEFAULT_SPEED: u32 = 1000;
-
 const GRAPH_CONTAINER_ID: &str = "graph";
 
 #[derive(Clone, Copy, PartialEq)]
 enum NodeState {
     NotVisited,
     Visited,
-    Intermediate,
     Selected,
     Current,
 }
@@ -23,19 +21,22 @@ impl NodeState {
         match self {
             NodeState::NotVisited => "not-visited",
             NodeState::Visited => "visited",
-            NodeState::Intermediate => "intermediate",
             NodeState::Selected => "selected",
             NodeState::Current => "current",
         }
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct ResultItem {
     pub query: String,
-    pub paths: Vec<Vec<u32>>,
-    pub selected: Vec<u32>,
-    pub traversal_path: Vec<u32>,
+    pub paths: Vec<Vec<(usize, usize)>>,
+    pub selected: Vec<usize>,
+    pub duration: u128,
+    pub nodes_count: usize,
+    pub logs: Vec<String>,
+    #[serde(default)]
+    pub err: String,
 }
 
 #[derive(Properties, PartialEq)]
@@ -43,6 +44,9 @@ pub struct ResultPlayerProps {
     pub is_open: bool,
     #[prop_or_default]
     pub result_data: Vec<ResultItem>,
+    #[prop_or_default]
+    pub disabled: bool,
+    pub anim_type: crate::AnimationType,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -54,376 +58,333 @@ enum PlaybackState {
 
 #[component]
 pub fn ResultPlayer(props: &ResultPlayerProps) -> Html {
-    let _ctx = use_context::<GraphContext>().unwrap();
-
+    let ctx = use_context::<GraphContext>().unwrap();
     let speed = use_state(|| DEFAULT_SPEED);
-    let _use_dfs = use_state(|| true);
-    let step = use_state(|| 0u32);
-    let sub_step = use_state(|| 0u32);
+    let step = use_state(|| 0usize);
+    let tick = use_state(|| 0usize);
     let playback_state = use_state(|| PlaybackState::Stopped);
 
-    let _affected_nodes = use_state(|| Vec::<u32>::new());
-    let _matched_nodes = use_state(|| Vec::<u32>::new());
+    let total_steps = props.result_data.len();
+    let is_playing = *playback_state == PlaybackState::Playing && !props.disabled;
 
-    let total_steps = if props.result_data.is_empty() {
-        1u32
-    } else {
-        props.result_data.len() as u32
-    };
+    // Reset player when new results arrive
+    {
+        let step = step.clone();
+        let tick = tick.clone();
+        let playback_state = playback_state.clone();
+        use_effect_with(props.result_data.clone(), move |_| {
+            step.set(0);
+            tick.set(0);
+            playback_state.set(PlaybackState::Stopped);
+            || ()
+        });
+    }
 
-    let is_playing = *playback_state == PlaybackState::Playing;
-
+    // Simulation: Calculate when each node is actually activated based on dependencies
+    let step_val = *step;
     let result_data = props.result_data.clone();
-    let step_clone = step.clone();
-    let sub_step_clone = sub_step.clone();
-    let playback_state_clone = playback_state.clone();
-    let speed_handle = speed.clone();
+    let activation_ticks = use_memo((result_data, step_val), |(data, s)| {
+        let mut ticks = std::collections::HashMap::<usize, usize>::new();
+        if let Some(res) = data.get(*s) {
+            let mut pointers = vec![0usize; res.paths.len()];
+            let mut current_tick = 0usize;
+            let mut visited = std::collections::HashSet::new();
 
-    use_interval(
-        move || {
-            if !result_data.is_empty() {
-                let current_idx = *step_clone;
-                let current_result = result_data.get(current_idx as usize);
-
-                if let Some(result) = current_result {
-                    let current_sub = *sub_step_clone;
-
-                    if current_sub < result.traversal_path.len() as u32 - 1 {
-                        sub_step_clone.set(current_sub + 1);
-                    } else if current_idx < result_data.len() as u32 - 1 {
-                        step_clone.set(current_idx + 1);
-                        sub_step_clone.set(0);
-                    } else {
-                        playback_state_clone.set(PlaybackState::Stopped);
+            loop {
+                let mut fired_this_tick = Vec::new();
+                for i in 0..res.paths.len() {
+                    if pointers[i] < res.paths[i].len() {
+                        let (dep, node) = res.paths[i][pointers[i]];
+                        // A node fires if it has no dependency (dep == node) OR if its dependency was already visited
+                        if dep == node || visited.contains(&dep) {
+                            fired_this_tick.push((i, node));
+                        }
                     }
                 }
+
+                if fired_this_tick.is_empty() {
+                    break;
+                }
+
+                for (thread_idx, node_id) in fired_this_tick {
+                    if !ticks.contains_key(&node_id) {
+                        ticks.insert(node_id, current_tick);
+                    }
+                    visited.insert(node_id);
+                    pointers[thread_idx] += 1;
+                }
+                current_tick += 1;
+                
+                if current_tick > 10000 { break; }
             }
-        },
-        if is_playing { *speed_handle } else { 0 },
-    );
+        }
+        ticks
+    });
 
-    let handle_play = {
-        let playback_state = playback_state.clone();
-        Callback::from(move |_| {
-            playback_state.set(PlaybackState::Playing);
-        })
+    let max_ticks = if activation_ticks.is_empty() { 0 } else {
+        *activation_ticks.values().max().unwrap_or(&0) + 1
     };
 
-    let handle_pause = {
-        let playback_state = playback_state.clone();
-        Callback::from(move |_| {
-            playback_state.set(PlaybackState::Paused);
-        })
-    };
+    let current_result = props.result_data.get(*step);
 
-    let handle_stop = {
+    // Playback Loop
+    {
         let playback_state = playback_state.clone();
         let step = step.clone();
-        let sub_step = sub_step.clone();
+        let tick = tick.clone();
+        let result_data = props.result_data.clone();
+        let speed = *speed;
+        let max_ticks_val = max_ticks;
+        let disabled = props.disabled;
+
+        use_interval(
+            move || {
+                if disabled { return; }
+                let current_tick = *tick;
+                let current_step = *step;
+
+                if current_tick + 1 < max_ticks_val {
+                    tick.set(current_tick + 1);
+                } else if current_step + 1 < result_data.len() {
+                    step.set(current_step + 1);
+                    tick.set(0);
+                } else {
+                    // Stay at the last step/tick instead of stopping
+                    // This keeps animation_active true and Reset enabled
+                }
+            },
+            if is_playing { speed } else { 0 },
+        );
+    }
+
+    let toggle_playback = {
+        let playback_state = playback_state.clone();
+        let ctx = ctx.clone();
+        let disabled = props.disabled;
+        let anim_type = props.anim_type;
         Callback::from(move |_| {
+            if disabled { return; }
+            if *playback_state == PlaybackState::Playing {
+                playback_state.set(PlaybackState::Paused);
+            } else {
+                playback_state.set(PlaybackState::Playing);
+                ctx.dispatch(GraphAction::SetAnimationType(anim_type));
+                ctx.dispatch(GraphAction::SetAnimationActive(true));
+            }
+        })
+    };
+
+    let handle_reset = {
+        let playback_state = playback_state.clone();
+        let step = step.clone();
+        let tick = tick.clone();
+        let ctx = ctx.clone();
+        let disabled = props.disabled;
+        Callback::from(move |_| {
+            if disabled { return; }
             playback_state.set(PlaybackState::Stopped);
             step.set(0);
-            sub_step.set(0);
-            clear_all_node_colors();
+            tick.set(0);
+            ctx.dispatch(GraphAction::SetAnimationActive(false));
+            ctx.dispatch(GraphAction::SetAnimationType(crate::AnimationType::None));
         })
     };
 
     let handle_prev = {
         let step = step.clone();
-        let sub_step = sub_step.clone();
+        let tick = tick.clone();
+        let ctx = ctx.clone();
+        let disabled = props.disabled;
+        let anim_type = props.anim_type;
         Callback::from(move |_| {
-            if *sub_step > 0 {
-                sub_step.set(*sub_step - 1);
+            if disabled { return; }
+            ctx.dispatch(GraphAction::SetAnimationType(anim_type));
+            ctx.dispatch(GraphAction::SetAnimationActive(true));
+            if *tick > 0 {
+                tick.set(*tick - 1);
             } else if *step > 0 {
                 step.set(*step - 1);
+                tick.set(0);
             }
         })
     };
 
     let handle_next = {
         let step = step.clone();
-        let sub_step = sub_step.clone();
-        let result_data = props.result_data.clone();
+        let tick = tick.clone();
+        let total_steps = total_steps;
+        let max_ticks_val = max_ticks;
+        let ctx = ctx.clone();
+        let disabled = props.disabled;
+        let anim_type = props.anim_type;
         Callback::from(move |_| {
-            let current = result_data.get(*step as usize);
-            if let Some(res) = current {
-                if *sub_step < res.traversal_path.len() as u32 - 1 {
-                    sub_step.set(*sub_step + 1);
-                } else if *step < result_data.len() as u32 - 1 {
-                    step.set(*step + 1);
-                    sub_step.set(0);
-                }
+            if disabled { return; }
+            ctx.dispatch(GraphAction::SetAnimationType(anim_type));
+            ctx.dispatch(GraphAction::SetAnimationActive(true));
+            if *tick + 1 < max_ticks_val {
+                tick.set(*tick + 1);
+            } else if *step + 1 < total_steps {
+                step.set(*step + 1);
+                tick.set(0);
             }
         })
     };
 
     let handle_speed_change = {
         let speed = speed.clone();
-        Callback::from(move |e: yew::events::InputEvent| {
-            let input = e.target_unchecked_into::<web_sys::HtmlInputElement>();
-            let val = input.value().parse().unwrap_or(1000);
-            speed.set(val);
+        let disabled = props.disabled;
+        Callback::from(move |e: InputEvent| {
+            if disabled { return; }
+            let input: web_sys::HtmlInputElement = e.target_unchecked_into();
+            if let Ok(val) = input.value().parse::<u32>() {
+                speed.set(val);
+            }
         })
     };
 
-    let handle_speed_up = {
-        let speed = speed.clone();
-        Callback::from(move |_| {
-            let new_speed = (*speed as f64 * 0.5).max(100f64);
-            speed.set(new_speed as u32);
-        })
-    };
+    // Effect to update DOM colors
+    {
+        let step_val = *step;
+        let tick_val = *tick;
+        let is_open = props.is_open;
+        let disabled = props.disabled;
+        let pb_state = *playback_state;
+        let activation_ticks_val = activation_ticks.clone();
+        let current_res = current_result.cloned();
+        let anim_active = ctx.animation_active;
 
-    let handle_speed_down = {
-        let speed = speed.clone();
-        Callback::from(move |_| {
-            let new_speed = (*speed as f64 * 2.0).min(10000f64);
-            speed.set(new_speed as u32);
-        })
-    };
+        let total_steps_val = total_steps;
+        let max_ticks_val = max_ticks;
 
-    let current_step = *step;
-    let current_sub_step = *sub_step;
-    let current_speed = *speed;
+        use_effect_with((step_val, tick_val, is_open, pb_state, anim_active, disabled), move |(s, t, open, state, active, dis)| {
+            if !*open || !*active || *dis {
+                // Only clear if we are the ones who were supposed to be active or if we just became disabled
+                if *open && *active && !*dis {
+                    
+                } 
+                else {
+                    clear_all_node_colors();
+                }
+            } else if let Some(res) = current_res {
+                let mut visited = std::collections::HashSet::new();
+                let mut current_nodes = std::collections::HashSet::new();
+                let is_stopped = *state == PlaybackState::Stopped;
+                let is_at_end = (*t + 1 >= max_ticks_val) && (*s + 1 >= total_steps_val);
 
-    let (affected_display, matched_display, total_sub_steps) = {
-        let current_result = props.result_data.get(current_step as usize);
-        let total_sub = current_result
-            .map(|r| r.traversal_path.len() as u32)
-            .unwrap_or(1);
-
-        let affected: Vec<Html> = if let Some(result) = current_result {
-            // unique
-            result
-                .traversal_path
-                .iter()
-                .take(current_sub_step as usize + 1)
-                .fold(Vec::new(), |mut acc, &node| {
-                    if !acc.contains(&node) {
-                        acc.push(node);
-                    }
-                    acc
-                })
-                .into_iter()
-                .map(|node| html! { <p>{node}</p> })
-                .collect()
-        } else {
-            vec![]
-        };
-
-        let matched: Vec<Html> = if let Some(result) = current_result {
-            result
-                .traversal_path
-                .iter()
-                .take(current_sub_step as usize + 1)
-                .filter(|&&node| result.selected.contains(&node))
-                .fold(Vec::new(), |mut acc, &node| {
-                    if !acc.contains(&node) {
-                        acc.push(node);
-                    }
-                    acc
-                })
-                .into_iter()
-                .map(|node| html! { <p>{node}</p> })
-                .collect()
-        } else {
-            vec![]
-        };
-
-        (affected, matched, total_sub)
-    };
-
-    let step_value = *step;
-    let sub_step_value = *sub_step;
-    let result_data_for_effect = props.result_data.clone();
-    let is_open = props.is_open;
-
-    use_effect_with(
-        (step_value, sub_step_value),
-        move |(current_step, current_sub)| {
-            let result_data = result_data_for_effect.clone();
-            if let Some(current) = result_data.get(*current_step as usize) {
-                let traversed: Vec<u32> = current
-                    .traversal_path
-                    .iter()
-                    .take(*current_sub as usize + 1)
-                    .fold(Vec::new(), |mut acc, &node| {
-                        if acc.contains(&node) {
-                            acc.retain(|&n| n != node);
-                        } else {
-                            acc.push(node);
+                for (&node_id, &activation_tick) in activation_ticks_val.iter() {
+                    if activation_tick <= *t {
+                        visited.insert(node_id);
+                        if activation_tick == *t && !is_stopped && !is_at_end {
+                            current_nodes.insert(node_id);
                         }
-                        acc
-                    });
+                    }
+                }
 
-                let visited: Vec<u32> = current
-                    .traversal_path
-                    .iter()
-                    .take(*current_sub as usize + 1)
-                    // unique
-                    .fold(Vec::new(), |mut acc, &node| {
-                        if !acc.contains(&node) {
-                            acc.push(node);
-                        }
-                        acc
-                    });
-
-                color_nodes(
-                    &traversed,
-                    &current.selected,
-                    &visited,
-                    &current.paths,
-                    *current_sub as usize,
-                );
+                color_nodes(&visited, &current_nodes, &res.selected);
             }
             || ()
-        },
-    );
+        });
+    }
 
-    use_effect_with(is_open, move |open| {
-        if !*open {
-            clear_all_node_colors();
-        }
-        || ()
-    });
+    if !props.is_open || props.result_data.is_empty() {
+        return html! {};
+    }
+
+    let container_class = if props.disabled {
+        "flex flex-col gap-3 p-2 bg-gray-100 rounded border border-gray-200 opacity-60 pointer-events-none"
+    } else {
+        "flex flex-col gap-3 p-2 bg-white rounded border border-gray-300 shadow-sm"
+    };
 
     html! {
-        <div class="border-t border-black flex flex-col gap-4 hidden data-[open=true]:block" data-open={props.is_open.to_string()}>
-            <div class="flex flex-col gap-2 px-4 py-2">
-                <div class="flex flex-row justify-around p-2">
-                    {for props.result_data.iter().enumerate().map(|(i, item)| {
-                        html! {
-                            <div class="p-2 border-b border-gray-300">
-                                <p class="font-bold">
-                                    {"Query "}
-                                    {i + 1}
-                                    {": "}
-                                    {&item.query}
-                                </p>
-                            </div>
-                        }
-                    })}
+        <div class={container_class}>
+            <div class="flex flex-row justify-between items-center gap-1">
+                <button disabled={props.disabled} onclick={handle_prev} class="px-2 py-1 bg-gray-200 hover:bg-gray-300 active:scale-95 transition-all rounded text-xs shadow-sm">{"Prev"}</button>
+                <div class="font-mono text-[10px] font-bold text-blue-600 truncate flex-1 text-center px-1">
+                    {current_result.map(|r| r.query.clone()).unwrap_or_default()}
                 </div>
-                <div class="flex flex-row px-4 py-2 justify-between items-center">
-                    <button onclick={handle_prev} class="px-2 py-1 bg-gray-300">{"Prev"}</button>
-                    <div class="flex flex-col items-center">
-                        <span>{format!("Step: {}/{}", current_step + 1, total_steps)}</span>
-                        <span>{format!("Sub-step: {}/{}", current_sub_step + 1, total_sub_steps)}</span>
-                    </div>
-                    <button onclick={handle_next} class="px-2 py-1 bg-gray-300">{"Next"}</button>
-                </div>
-                <div class="flex flex-row justify-center gap-2 p-2">
-                    <button onclick={handle_speed_down} class="px-4 py-1 bg-blue-500 text-white">{"/2"}</button>
-                    <button onclick={handle_play} class="px-4 py-1 bg-green-500 text-white">{"Play"}</button>
-                    <button onclick={handle_pause} class="px-4 py-1 bg-yellow-500 text-white">{"Pause"}</button>
-                    <button onclick={handle_stop} class="px-4 py-1 bg-red-500 text-white">{"Stop"}</button>
-                    <button onclick={handle_speed_up} class="px-4 py-1 bg-blue-500 text-white">{"2x"}</button>
-                </div>
-                <div class="flex flex-row justify-between p-2">
-                    <label>
-                        {"Speed (ms): "}
-                        <input type="number" value={current_speed.to_string()} oninput={handle_speed_change} class="border border-gray-300 p-1" />
-                    </label>
-                </div>
-                <div class="m-2 flex flex-col gap-2">
-                    <p>{"Matched Nodes:"}</p>
-                    <div class="flex flex-col gap-2">
-                        {matched_display}
-                    </div>
-                </div>
-                <div class="m-2 flex flex-col gap-2">
-                    <p>{"Affected Nodes:"}</p>
-                    <div class="flex flex-col gap-2">
-                        {affected_display}
-                    </div>
-                </div>
+                <button disabled={props.disabled} onclick={handle_next} class="px-2 py-1 bg-gray-200 hover:bg-gray-300 active:scale-95 transition-all rounded text-xs shadow-sm">{"Next"}</button>
+            </div>
+
+            <div class="flex flex-row gap-1">
+                <button 
+                    disabled={props.disabled}
+                    onclick={toggle_playback} 
+                    class={format!("flex-[2] py-1 rounded text-xs text-white active:scale-95 transition-all shadow-sm active:shadow-inner {}", 
+                        if is_playing { "bg-yellow-500 hover:bg-yellow-600" } else { "bg-green-600 hover:bg-green-700" }
+                    )}
+                >
+                    {if is_playing { "Pause" } else { "Play" }}
+                </button>
+                <button 
+                    disabled={props.disabled || *playback_state == PlaybackState::Stopped}
+                    onclick={handle_reset} 
+                    class={format!("flex-1 py-1 rounded text-xs text-white transition-all shadow-sm active:shadow-inner {}",
+                        if props.disabled || *playback_state == PlaybackState::Stopped { "bg-gray-400 cursor-not-allowed" } else { "bg-red-600 hover:bg-red-700 active:scale-95" }
+                    )}
+                >
+                    {"Reset"}
+                </button>
+            </div>
+
+            <div class="flex flex-row items-center gap-2">
+                <label class="text-[9px] font-bold text-gray-400 uppercase">{"Interval:"}</label>
+                <input 
+                    disabled={props.disabled}
+                    type="number" 
+                    value={speed.to_string()} 
+                    oninput={handle_speed_change} 
+                    class="flex-1 text-xs p-1 border border-gray-300 rounded"
+                    min="10"
+                />
+                <span class="text-[9px] text-gray-500">{format!("{}/{}", if max_ticks > 0 { *tick + 1 } else { 0 }, max_ticks)}</span>
             </div>
         </div>
     }
 }
 
 fn color_nodes(
-    traversed: &[u32],
-    selected: &[u32],
-    visited: &[u32],
-    paths: &[Vec<u32>],
-    _current_sub_step: usize,
+    visited: &std::collections::HashSet<usize>,
+    current: &std::collections::HashSet<usize>,
+    selected: &[usize],
 ) {
-    let Some(window) = web_sys::window() else {
-        return;
-    };
-    let Some(document) = window.document() else {
-        return;
-    };
-    let Some(container) = document.get_element_by_id(GRAPH_CONTAINER_ID) else {
-        return;
-    };
-
-    reset_node_colors(&container);
+    let Some(document) = web_sys::window().and_then(|w| w.document()) else { return; };
+    let Some(container) = document.get_element_by_id(GRAPH_CONTAINER_ID) else { return; };
 
     if let Ok(node_cards) = container.query_selector_all(".graph-node") {
-        let len = node_cards.length();
-        for i in 0..len {
-            if let Some(card) = node_cards.get(i) {
-                if let Some(card_el) = card.dyn_ref::<web_sys::Element>() {
-                    let id_str = card_el.get_attribute("id").unwrap_or_default();
-                    let node_index: u32 = id_str
-                        .strip_prefix("graph-node-")
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(i as u32);
+        for i in 0..node_cards.length() {
+            if let Some(card_el) = node_cards.get(i).and_then(|n| n.dyn_into::<web_sys::Element>().ok()) {
+                let id_str = card_el.get_attribute("id").unwrap_or_default();
+                let node_index = id_str
+                    .strip_prefix("graph-node-")
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(i as usize);
 
-                    let mut state = NodeState::NotVisited;
+                let state = if current.contains(&node_index) {
+                    NodeState::Current
+                } else if selected.contains(&node_index) && visited.contains(&node_index) {
+                    NodeState::Selected
+                } else if visited.contains(&node_index) {
+                    NodeState::Visited
+                } else {
+                    NodeState::NotVisited
+                };
 
-                    if selected.contains(&node_index) && visited.contains(&node_index) {
-                        state = NodeState::Selected;
-                    } else {
-                        let intermediates: Vec<u32> = paths
-                            .iter()
-                            .filter(|p| p.last().map(|n| visited.contains(n)).unwrap_or(false))
-                            .flatten()
-                            .cloned()
-                            .collect();
-                        if intermediates.contains(&node_index) {
-                            state = NodeState::Intermediate;
-                        } else if visited.contains(&node_index) {
-                            state = NodeState::Visited;
-                        }
-                    }
-
-                    if traversed.last() == Some(&node_index) {
-                        state = NodeState::Current;
-                    }
-
-                    let _ = card_el.set_attribute("data-state", state.value());
-                }
-            }
-        }
-    }
-}
-
-fn reset_node_colors(container: &Element) {
-    if let Ok(node_cards) = container.query_selector_all(".graph-node") {
-        let len = node_cards.length();
-        for i in 0..len {
-            if let Some(card) = node_cards.get(i) {
-                if let Some(card_el) = card.dyn_ref::<web_sys::Element>() {
-                    let _ = card_el.set_attribute("data-state", "not-visited");
-                }
+                let _ = card_el.set_attribute("data-state", state.value());
             }
         }
     }
 }
 
 fn clear_all_node_colors() {
-    let Some(window) = web_sys::window() else {
-        return;
-    };
-    let Some(document) = window.document() else {
-        return;
-    };
-    let Some(container) = document.get_element_by_id(GRAPH_CONTAINER_ID) else {
-        return;
-    };
+    let Some(document) = web_sys::window().and_then(|w| w.document()) else { return; };
+    let Some(container) = document.get_element_by_id(GRAPH_CONTAINER_ID) else { return; };
 
-    reset_node_colors(&container);
+    if let Ok(node_cards) = container.query_selector_all(".graph-node") {
+        for i in 0..node_cards.length() {
+            if let Some(card_el) = node_cards.get(i).and_then(|n| n.dyn_into::<web_sys::Element>().ok()) {
+                let _ = card_el.set_attribute("data-state", "not-visited");
+            }
+        }
+    }
 }
