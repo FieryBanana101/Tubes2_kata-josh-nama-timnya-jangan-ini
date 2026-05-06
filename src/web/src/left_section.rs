@@ -328,14 +328,14 @@ pub fn LeftSection() -> Html {
 
     html! {
         <div class="absolute left-0 top-0 z-50">
-            <button class="absolute h-[2em] left-0 top-0 bg-gray-500 px-4 text-white text-xs font-bold rounded-br-lg active:scale-95 transition-all shadow-md z-[60]" onclick={toggle_open}>
-                {if *is_open {"Close"} else {"Open"} }
+            <button class="absolute h-[3em] left-0 top-0 w-60 bg-violet-500 px-7 text-white text-lg font-bold rounded-br-xl active:scale-95 transition-all shadow-lg z-[60]" onclick={toggle_open}>
+                {if *is_open {"Close"} else {"Open Control"} }
             </button>
             <div data-open={(*is_open).to_string()}
-                 class="flex flex-col gap-6 w-96 h-screen bg-gray-200 data-[open=false]:hidden border-r border-black overflow-y-scroll p-6 pt-12 shadow-2xl transition-all">
+                 class="flex flex-col gap-6 w-96 h-screen bg-gray-200 data-[open=false]:hidden border-r border-black overflow-y-scroll p-6 pt-20 shadow-2xl transition-all">
                 
                 <section class="flex flex-col gap-4 border-b border-gray-400 pb-6">
-                    <h3 class="font-bold">{"Submit HTML Section"}</h3>
+                    <h3 class="font-bold">{"Convert HTML to DOM Tree"}</h3>
                     <HtmlInput 
                         onchange={on_input_type_change} 
                         input_type_str={(*input_type).clone()} 
@@ -344,7 +344,7 @@ pub fn LeftSection() -> Html {
                         {text_input_ref} 
                         {on_file_change} 
                     />
-                    <button class="bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700 active:scale-95 transition-all shadow-sm active:shadow-inner" onclick={on_submit_html}>{"submit html button"}</button>
+                    <button class="bg-blue-600 text-white py-2 rounded font-medium hover:bg-blue-700 active:scale-95 transition-all shadow-sm active:shadow-inner" onclick={on_submit_html}>{"Submit HTML"}</button>
                     
                     {if *html_submitted {
                         let duration_text = if *html_duration < 1000 {
@@ -355,7 +355,7 @@ pub fn LeftSection() -> Html {
                             format!("{:.2} s", *html_duration as f64 / 1_000_000.0)
                         };
                         html! {
-                            <div class="text-xs font-mono text-gray-600 space-y-1 mt-1">
+                            <div class="text-xs font-mono text-gray-900 space-y-1 mt-1">
                                 <div class="flex justify-between">
                                     <span>{"Total Nodes:"}</span>
                                     <span>{*html_nodes_count}</span>
@@ -377,9 +377,9 @@ pub fn LeftSection() -> Html {
                     html! {
                         <>
                         <section class="flex flex-col gap-4 border-b border-gray-400 pb-6">
-                            <h3 class="font-bold">{"Try CSS Query section"}</h3>
+                            <h3 class="font-bold">{"Search DOM Tree"}</h3>
                             <div class="flex flex-col gap-2">
-                                <label class="text-sm font-medium">{"CSS Query:"}</label>
+                                <label class="text-sm font-medium">{"CSS Selector:"}</label>
                                 <textarea 
                                     oninput={on_css_query_change}
                                     class="w-full min-h-32 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none" 
@@ -389,14 +389,14 @@ pub fn LeftSection() -> Html {
                             
                             <div class="grid grid-cols-3 gap-2">
                                 <div class="flex flex-col gap-1">
-                                    <label class="text-[10px] font-bold text-gray-500 uppercase">{"Mode:"}</label>
+                                    <label class="text-[10px] font-bold text-gray-900 uppercase">{"Mode:"}</label>
                                     <select onchange={on_traversal_mode_change} class="p-1 border border-gray-300 rounded text-xs bg-white h-8">
                                         <option value="DFS" selected={*use_dfs}>{"DFS"}</option>
                                         <option value="BFS" selected={!*use_dfs}>{"BFS"}</option>
                                     </select>
                                 </div>
                                 <div class="flex flex-col gap-1">
-                                    <label class="text-[10px] font-bold text-gray-500 uppercase">{"Threads:"}</label>
+                                    <label class="text-[10px] font-bold text-gray-900 uppercase">{"Threads:"}</label>
                                     <input 
                                         type="number" 
                                         value={threads.to_string()} 
@@ -413,7 +413,7 @@ pub fn LeftSection() -> Html {
                                             checked={*limit_enabled}
                                             onchange={on_limit_enabled_change}
                                         />
-                                        <label for="limit-matched" class="text-[10px] font-bold text-gray-500 uppercase">{"Limit:"}</label>
+                                        <label for="limit-matched" class="text-[10px] font-bold text-gray-900 uppercase">{"Limit:"}</label>
                                     </div>
                                     <input 
                                         type="number" 
@@ -430,7 +430,7 @@ pub fn LeftSection() -> Html {
                                 class="bg-green-600 text-white py-2 rounded font-medium hover:bg-green-700 active:scale-95 transition-all shadow-sm active:shadow-inner"
                                 onclick={on_submit_css}
                             >
-                                {"submit button for css query"}
+                                {"Search Matching Nodes"}
                             </button>
                             
                             {if let Some(res) = result_data.first() {
@@ -442,7 +442,7 @@ pub fn LeftSection() -> Html {
                                     format!("{:.2} s", res.duration as f64 / 1_000_000.0)
                                 };
                                 html! {
-                                    <div class="text-xs font-mono text-gray-600 space-y-1 mt-1">
+                                    <div class="text-xs font-mono text-gray-900 space-y-1 mt-1">
                                         <div class="flex justify-between">
                                             <span>{"Visited Count:"}</span>
                                             <span>{res.nodes_count}</span>
@@ -463,14 +463,14 @@ pub fn LeftSection() -> Html {
                         </section>
 
                         <section class="flex flex-col gap-2 border-b border-gray-400 pb-4">
-                            <h3 class="font-bold">{"Try to find LCA"}</h3>
+                            <h3 class="font-bold">{"Search for Least Common Ancestor"}</h3>
                             <button 
                                 class="bg-purple-600 hover:bg-purple-700 text-white py-2 rounded font-medium active:scale-95 transition-all shadow-sm active:shadow-inner"
                                 onclick={on_submit_lca}
                             >
-                                {"submit button for try lca"}
+                                {"Find LCA"}
                             </button>
-                            <div class="text-xs text-gray-500 font-medium">
+                            <div class="text-xs text-gray-900 font-medium">
                                 {format!("Selected Nodes for LCA: {:?}", ctx.lca_selected)}
                             </div>
                             
@@ -483,7 +483,7 @@ pub fn LeftSection() -> Html {
                                     format!("{:.2} s", res.duration as f64 / 1_000_000.0)
                                 };
                                 html! {
-                                    <div class="text-xs font-mono text-gray-600 space-y-1 mt-1">
+                                    <div class="text-xs font-mono text-gray-900 space-y-1 mt-1">
                                         <div class="flex justify-between">
                                             <span>{"Total Nodes Visited:"}</span>
                                             <span>{res.nodes_count}</span>

@@ -21,13 +21,13 @@ pub fn RightSection() -> Html {
     html! {
         <div class="absolute right-0 top-0 z-50 flex flex-row-reverse">
             <button 
-                class="absolute h-[2em] right-0 top-0 bg-gray-500 px-4 text-white text-xs font-bold rounded-bl-lg active:scale-95 transition-all shadow-md z-[60]" 
+                class="absolute h-[3em] right-0 top-0 w-40 bg-violet-500 px-7 text-white text-lg font-bold rounded-bl-xl active:scale-95 transition-all shadow-lg z-[60]" 
                 onclick={toggle_open}
             >
-                {if *is_open {"Close"} else {"Open"} }
+                {if *is_open {"Close"} else {"Open Logs"} }
             </button>
             <div data-open={(*is_open).to_string()}
-                 class="flex flex-col gap-4 w-96 h-screen bg-gray-200 data-[open=false]:hidden border-l border-black overflow-y-scroll p-6 pt-12 shadow-2xl transition-all">
+                 class="flex flex-col gap-4 w-96 h-screen bg-gray-200 data-[open=false]:hidden border-l border-black overflow-y-scroll p-6 pt-20 shadow-2xl transition-all">
                 
                 <div class="flex justify-between items-center border-b border-gray-400 pb-4">
                     <h3 class="font-bold text-lg">{"Activity Log"}</h3>

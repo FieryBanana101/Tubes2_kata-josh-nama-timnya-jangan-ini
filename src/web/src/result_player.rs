@@ -260,12 +260,9 @@ pub fn ResultPlayer(props: &ResultPlayerProps) -> Html {
             if !*open || !*active || *dis {
                 // Only clear if we are the ones who were supposed to be active or if we just became disabled
                 if *open && *active && !*dis {
-                   // This branch won't be hit because of the if condition above
-                } else {
-                    // We only clear colors if we are the active component OR if we just transitioned to inactive
-                    // But to avoid race conditions with other ResultPlayers, we should be careful.
-                    // For now, if we are NOT open or NOT active or disabled, we clear.
-                    // To mitigate the race, we could check ctx.animation_type, but ResultPlayer is generic.
+                    
+                } 
+                else {
                     clear_all_node_colors();
                 }
             } else if let Some(res) = current_res {
