@@ -1,5 +1,5 @@
-# --- Build Stage ---
-FROM rust:slim as builder
+# Use Multi-stage builds to reduce size
+FROM rust:slim AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -9,13 +9,8 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY . .
 
-# Use BuildKit cache mounts to preserve dependencies and target between builds
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/app/target \
-    cargo build --release -p Tubes2_kata-josh-nama-timnya-jangan-ini_Server && \
-    cp target/release/Tubes2_kata-josh-nama-timnya-jangan-ini_Server /app/server-bin
+RUN cargo build --release --bin server-bin
 
-# --- Runtime Stage ---
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y \
@@ -24,7 +19,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=builder /app/server-bin ./server
+COPY --from=builder /app/target/release/server-bin ./server
 
 EXPOSE 8081
 CMD ["./server"]

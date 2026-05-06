@@ -1,5 +1,5 @@
 [package]
-name = "Tubes2_kata-josh-nama-timnya-jangan-ini_Server"
+name = "server-bin"
 version = "0.1.0"
 edition = "2021"
 

@@ -7,7 +7,7 @@ use std::collections::HashSet;
 
 use crate::async_util::*;
 use crate::css_selector::*;
-use crate::html::{parser, Element, Node};
+use crate::html::{Element, Node};
 
 /*
     Push all children of the current node into the global task pool,
@@ -504,6 +504,7 @@ pub fn async_bfs(
 #[cfg(test)]
 mod tests {
 
+    use crate::html::parser;
     use super::*;
 
     #[test]

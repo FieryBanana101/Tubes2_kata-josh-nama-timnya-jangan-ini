@@ -19,7 +19,6 @@ pub enum Namespace {
 /* DOM Node filter criteria for attributes */
 #[derive(Debug, Clone)]
 pub struct AttributeFilter {
-    pub namespace: Namespace,
     pub name: String, 
     pub operator: Option<String>,
     pub value: Option<String>,
@@ -631,14 +630,14 @@ impl<'a> CssSelectorParser<'a> {
 
         // Parse the <wq-name>
         self.skip_to_just_before_non_whitespace()?;
-        let (ns, ident) = self.parse_wq_name()?;
+        let (_, ident) = self.parse_wq_name()?;
 
 
         // Check if the <attribute-selector> ends early (has ']' token right now)
         self.next_token()?;
         self.skip_whitespaces()?;
         if self.css_lexer.current_token.kind() == CssTokenType::RightSquare {
-            return Ok(AttributeFilter { namespace: ns, name: ident , operator: None, value: None, modifier: None });
+            return Ok(AttributeFilter { name: ident , operator: None, value: None, modifier: None });
         } 
 
         
@@ -684,7 +683,6 @@ impl<'a> CssSelectorParser<'a> {
 
             CssTokenType::RightSquare => {
                 return Ok(AttributeFilter { 
-                    namespace: ns, 
                     name: ident, 
                     operator: Some(operator.to_string()), 
                     value: Some(value.to_string()), 
@@ -708,7 +706,6 @@ impl<'a> CssSelectorParser<'a> {
 
             CssTokenType::RightSquare => {
                 return Ok(AttributeFilter { 
-                    namespace: ns, 
                     name: ident, 
                     operator: Some(operator.to_string()), 
                     value: Some(value.to_string()), 

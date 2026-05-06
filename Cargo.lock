@@ -3,35 +3,6 @@
 version = 4
 
 [[package]]
-name = "Tubes2_kata-josh-nama-timnya-jangan-ini_Server"
-version = "0.1.0"
-dependencies = [
- "actix-cors",
- "actix-web",
- "css_lexer",
- "html5gum",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "Tubes2_kata-josh-nama-timnya-jangan-ini_Web"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "gloo 0.12.0",
- "gloo-net 0.7.0",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "web-sys",
- "yew",
- "yew-hooks",
-]
-
-[[package]]
 name = "actix-codec"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -626,6 +597,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "frontend-bin"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "gloo 0.12.0",
+ "gloo-net 0.7.0",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "web-sys",
+ "yew",
+ "yew-hooks",
 ]
 
 [[package]]
@@ -2026,6 +2012,20 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "server-bin"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-web",
+ "css_lexer",
+ "html5gum",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

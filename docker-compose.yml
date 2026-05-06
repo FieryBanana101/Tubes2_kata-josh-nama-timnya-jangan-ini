@@ -1,19 +1,38 @@
-
 services:
   server:
     build:
       context: .
       dockerfile: src/server/Dockerfile
-    ports:
-      - "8081:8081"
     restart: always
+
 
   web:
     build:
       context: .
       dockerfile: src/web/Dockerfile
-    ports:
-      - "8080:8080"
     restart: always
     depends_on:
       - server
+
+
+
+  caddy:
+    image: caddy:latest
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+      - server
+
+
+volumes:
+  caddy_data:
+  caddy_config:

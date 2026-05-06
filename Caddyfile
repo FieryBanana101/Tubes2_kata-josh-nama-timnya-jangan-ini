@@ -1,0 +1,4 @@
+{$DOMAIN} {
+    reverse_proxy /query server:8081
+    reverse_proxy web:8080
+}

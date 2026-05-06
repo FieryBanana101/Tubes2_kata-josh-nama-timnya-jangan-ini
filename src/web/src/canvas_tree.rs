@@ -130,7 +130,7 @@ pub fn CanvasTree() -> Html {
     html! {
         <div
             id={TREE_CONTAINER_ID}
-            class="h-screen w-screen w-full overflow-hidden bg-[#f0f2f5]"
+            class="h-screen w-screen w-full overflow-hidden bg-[#c3d8f7]"
             onwheel={onwheel}
         ></div>
     }
@@ -292,7 +292,6 @@ fn compute_layout_with_d3(parsed: &JsValue, container: &Element) -> Result<Layou
         let node_index = get_number_field(&data, "index").unwrap_or(i as f64) as i32;
 
         let attrs_value = Reflect::get(&data, &JsValue::from_str("attributes")).unwrap_or(JsValue::NULL);
-        let attrs_array = Array::from(&attrs_value);
         let mut attributes: Vec<(String, String)> = Vec::new();
         
         // Handle Map-like attributes from new JSON
@@ -440,7 +439,7 @@ fn draw_svg(document: &Document, container: &Element, layout: &LayoutResult) -> 
     Ok(())
 }
 
-fn setup_d3_zoom(document: &Document, _container: &Element, width: f64, height: f64) -> Result<(), String> {
+fn setup_d3_zoom(document: &Document, _container: &Element, _width: f64, _height: f64) -> Result<(), String> {
     let Some(window) = web_sys::window() else { return Err("No window".to_string()); };
     let svg_element = document.get_element_by_id("graph-svg").ok_or("SVG not found")?;
     let zoom_obj = d3_zoom();

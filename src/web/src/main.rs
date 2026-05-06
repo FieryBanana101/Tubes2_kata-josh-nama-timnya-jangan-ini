@@ -1,5 +1,4 @@
 use yew::prelude::*;
-use serde_json;
 use wasm_bindgen::prelude::*;
 
 mod bindings;

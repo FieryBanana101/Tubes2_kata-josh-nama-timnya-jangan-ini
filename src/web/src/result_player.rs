@@ -129,7 +129,7 @@ pub fn ResultPlayer(props: &ResultPlayerProps) -> Html {
 
     // Playback Loop
     {
-        let playback_state = playback_state.clone();
+        let _playback_state = playback_state.clone();
         let step = step.clone();
         let tick = tick.clone();
         let result_data = props.result_data.clone();

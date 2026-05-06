@@ -1,9 +1,7 @@
 use html5gum::{HtmlString, Token, Tokenizer};
-use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use std::time;
 
-use crate::async_util::*;
 
 #[derive(Debug, Clone)]
 pub enum Node {
@@ -90,7 +88,7 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, usize, u128), String> {
         children: Vec::new(),
     };
 
-    let mut position = 0;
+    let mut _position = 0;
     let start_time = time::Instant::now();
     
     for token in Tokenizer::new(html).infallible() {
@@ -159,7 +157,7 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, usize, u128), String> {
 
                 if tag.self_closing || VOID_TAGS.contains(&tag_string.as_str()) {
 
-                    position += 1;
+                    _position += 1;
 
                     let mut new_node = Element {
                         global_id: global_id_counter,
@@ -181,7 +179,7 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, usize, u128), String> {
                     output.push_str(&format!("SelfClosingToken({})\n", tag_string));
                 } else {
 
-                    position += 1;
+                    _position += 1;
 
                     let mut new_node = Element {
                         global_id: global_id_counter,
@@ -203,7 +201,7 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, usize, u128), String> {
             Token::EndTag(tag) => {
                 let tag_string = htmlstring_to_string(&tag.name);
 
-                position += 1;
+                _position += 1;
 
                 if let Some(pos) = stack.iter().position(|x| &x.tag == &tag_string) {
                     while stack.len() > pos + 1 {
@@ -233,7 +231,7 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, usize, u128), String> {
                     continue;
                 }
 
-                position += 1;
+                _position += 1;
 
                 if let Some(parent) = stack.last_mut() {
                     parent
@@ -243,7 +241,7 @@ pub fn parser(html: &str) -> Result<(Arc<Element>, usize, u128), String> {
                 output.push_str(&tag_string);
                 output.push('\n');
             }
-            Token::Comment(tag) => {}
+            Token::Comment(_) => {}
             Token::Doctype(_) => {}
             other => return Err(format!("unexpected input: {:?}", other)),
         }

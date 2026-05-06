@@ -21,7 +21,7 @@ pub fn RightSection() -> Html {
     html! {
         <div class="absolute right-0 top-0 z-50 flex flex-row-reverse">
             <button 
-                class="absolute h-[3em] right-0 top-0 w-40 bg-violet-500 px-7 text-white text-lg font-bold rounded-bl-xl active:scale-95 transition-all shadow-lg z-[60]" 
+                class="absolute h-[2em] right-0 top-0 w-40 bg-violet-500 px-7 text-white text-lg font-bold rounded-bl-xl active:scale-95 transition-all shadow-lg z-[60]" 
                 onclick={toggle_open}
             >
                 {if *is_open {"Close"} else {"Open Logs"} }

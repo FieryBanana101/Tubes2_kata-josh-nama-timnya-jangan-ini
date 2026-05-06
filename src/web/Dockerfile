@@ -10,13 +10,10 @@ RUN cargo install --locked trunk && \
     rustup target add wasm32-unknown-unknown
 
 WORKDIR /app
-# Copy the entire workspace to handle dependencies
 COPY . .
 
-# Set working directory to where index.html is
 WORKDIR /app/src/web
 
-# Expose Trunk's port
 EXPOSE 8080
 
 # Serve using trunk

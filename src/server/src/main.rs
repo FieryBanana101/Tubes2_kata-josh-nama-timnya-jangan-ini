@@ -1,4 +1,4 @@
-use actix_web::{web, App, HttpServer, HttpResponse, http, HttpRequest};
+use actix_web::{web, App, HttpServer, HttpResponse};
 use actix_cors::Cors;
 use serde::{Deserialize, Serialize};
 use std::time;
@@ -114,7 +114,6 @@ async fn process_query_html(body: QueryPostBody) -> HttpResponse {
             match client.get(&body.content).send().await {
                 Ok(resp) => resp.text().await.unwrap_or_default(),
                 Err(e) => {
-                    eprintln!("Network/Request Error: {:?}", e);
                     return HttpResponse::InternalServerError().body(format!("Failed to fetch URL: {}", e));
                 }
             }
@@ -268,7 +267,6 @@ async fn process_query_lca(body: QueryPostBody) -> HttpResponse {
 
 async fn query(body: web::Json<QueryPostBody>) -> HttpResponse {
     let body = body.into_inner();
-    println!("Received query: {:?}", body.query_type);
     match body.query_type.as_str() {
         "html" => process_query_html(body).await,
         "css" => process_query_css(body).await,

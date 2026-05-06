@@ -1,7 +1,6 @@
 use std::sync::{Arc, OnceLock, Mutex};
 use std::collections::HashMap;
-use crate::async_util::id_to_node;
-use crate::html::{Node, Element};
+use crate::html::{Node};
 
 
 
@@ -155,7 +154,7 @@ pub fn find_lca(node1: &Node, node2: &Node, metadata: &BinaryLiftMetadata) -> (N
         ancestors, 
         max_precompute_height,
         depth_map, 
-        max_depth,
+        max_depth: _,
         id_to_node_map, 
         node_to_id_map 
     } = metadata;
@@ -243,6 +242,7 @@ pub fn find_lca(node1: &Node, node2: &Node, metadata: &BinaryLiftMetadata) -> (N
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::html::Element;
 
     fn create_el(tag: &str, children: Vec<Node>) -> Node {
         Node::Element(Arc::new(Element {

@@ -120,7 +120,7 @@ pub fn LeftSection() -> Html {
             let html_nodes_count = html_nodes_count.clone();
             let html_duration = html_duration.clone();
             spawn_local(async move {
-                let res = Request::post("http://127.0.0.1:8081/query")
+                let res = Request::post("/query")
                     .json(&payload)
                     .expect("Failed to serialize body")
                     .send()
@@ -181,7 +181,7 @@ pub fn LeftSection() -> Html {
 
             let result_data = result_data.clone();
             spawn_local(async move {
-                let res = Request::post("http://127.0.0.1:8081/query")
+                let res = Request::post("/query")
                     .json(&payload)
                     .expect("Failed to serialize body")
                     .send()
@@ -238,7 +238,7 @@ pub fn LeftSection() -> Html {
 
             let lca_result_data = lca_result_data.clone();
             spawn_local(async move {
-                let res = Request::post("http://127.0.0.1:8081/query")
+                let res = Request::post("/query")
                     .json(&payload)
                     .expect("Failed to serialize body")
                     .send()
@@ -328,7 +328,7 @@ pub fn LeftSection() -> Html {
 
     html! {
         <div class="absolute left-0 top-0 z-50">
-            <button class="absolute h-[3em] left-0 top-0 w-60 bg-violet-500 px-7 text-white text-lg font-bold rounded-br-xl active:scale-95 transition-all shadow-lg z-[60]" onclick={toggle_open}>
+            <button class="absolute h-[2em] left-0 top-0 w-60 bg-violet-500 px-7 text-white text-lg font-bold rounded-br-xl active:scale-95 transition-all shadow-lg z-[60]" onclick={toggle_open}>
                 {if *is_open {"Close"} else {"Open Control"} }
             </button>
             <div data-open={(*is_open).to_string()}

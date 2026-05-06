@@ -8,7 +8,6 @@ use crate::html::Element;
 
 /* Shared global variable, for the current tree stored in the heap and a mapping from its global_id to the heap pointer */
 pub static CURRENT_TREE: OnceLock<Mutex<Arc<Element>>> = OnceLock::new();
-pub static ID_TO_NODE_MAP: OnceLock<Mutex<HashMap<usize, Arc<Element>>>> = OnceLock::new();
 
 
 pub fn get_current_tree() -> &'static Mutex<Arc<Element>> {
@@ -19,22 +18,6 @@ pub fn get_current_tree() -> &'static Mutex<Arc<Element>> {
     })
 }
 
-
-pub fn set_id_to_node_mapping(global_id: usize, element: Arc<Element>) {
-    let mut id_to_node_map =ID_TO_NODE_MAP.get_or_init(|| {
-        Mutex::new(
-            HashMap::new()
-        )
-    }).lock().unwrap();
-    
-    id_to_node_map.insert(global_id, element.clone());
-}
-
-
-pub fn id_to_node(global_id: usize) -> Arc<Element> {
-    let id_to_node_map = ID_TO_NODE_MAP.get().unwrap().lock().unwrap();
-    id_to_node_map[&global_id].clone()
-}
 
 
 /*
@@ -121,7 +104,6 @@ pub trait AsyncTraversalTracker<T> {
     fn new() -> Self where Self: Sized; 
     fn push(&self, item: T) where T: Debug;
     fn pop(&self) -> Option<T>;
-    fn len(&self) -> usize;
 }
 
 
@@ -165,12 +147,6 @@ impl<T> AsyncTraversalTracker<T> for AsyncStack<T> {
     }
 
 
-    fn len(&self) -> usize {
-        let vec = self.data.lock().expect("Failed to lock stack for len");
-        vec.len()
-    }
-
-
 }
 
 
@@ -193,12 +169,6 @@ impl<T> AsyncTraversalTracker<T> for AsyncQueue<T> {
     fn pop(&self) -> Option<T> {
         let mut vec = self.data.lock().expect("Failed to lock queue for pop");
         vec.pop_front()
-    }
-
-
-    fn len(&self) -> usize {
-        let vec = self.data.lock().expect("Failed to lock queue for len");
-        vec.len()
     }
 
 

@@ -1,4 +1,4 @@
-use crate::css_selector::{AttributeFilter, CssSelectorParser, PseudoFilter, SelectorUnit};
+use crate::css_selector::{AttributeFilter, PseudoFilter, SelectorUnit};
 use crate::html::{Element, Node};
 
 /* Implemented a method to match CSS Selector Unit with a DOM Node */
