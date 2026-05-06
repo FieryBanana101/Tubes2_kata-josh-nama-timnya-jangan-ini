@@ -325,10 +325,10 @@ fn App() -> Html {
                 { if let Some(msg) = &graph.error_message {
                     html! {
                         <div class="fixed inset-0 z-[110] flex items-center justify-center bg-black bg-opacity-50">
-                            <div class="bg-white p-6 rounded border-2 border-red-500 shadow-xl w-96 relative">
+                            <div class="bg-white p-6 rounded border-2 border-red-500 shadow-xl w-96 max-h-[80vh] flex flex-col relative">
                                 <button onclick={on_close_error.clone()} class="absolute top-2 right-2 text-gray-500 hover:text-black text-xl font-bold">{"×"}</button>
                                 <h2 class="text-lg font-bold mb-4 text-red-600">{"Error"}</h2>
-                                <div class="text-sm text-gray-700 break-words">
+                                <div class="text-sm text-gray-700 break-words overflow-y-auto">
                                     {msg}
                                 </div>
                             </div>
