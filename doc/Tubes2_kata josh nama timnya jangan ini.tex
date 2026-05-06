@@ -82,7 +82,7 @@
     {\large \textsc{Pemanfaatan Algoritma BFS dan DFS dalam Mekanisme Penelusuran CSS pada pohon \textit{Document Object Model}}} \\[0.5em]
     {\normalsize Semester II Tahun 2025/2026} \\[3em]
 
-    \includegraphics[width=0.45\textwidth]{foto-kelompok.png} \\ [1cm]
+    \includegraphics[width=10cm, height=5cm]{foto-kelompok.png} \\ [1cm]
     \begin{center}
         \large
         \begin{tabular*}{0.55\textwidth}{@{\hspace{0pt}} l @{\hspace{1cm}} r @{\hspace{0pt}}}
@@ -1300,8 +1300,225 @@ dan \textit{traversal path} adalah gabungan dari semua path yg dilalui pada suat
 ketika ada index simpul yang sama artinya terjadi \textit{backtracking}. \\
 
 
+\subsubsection{Deployment}
+
+Deployment dilakukan pada sebuah Microsoft Azure \textit{cloud service}, menggunakan \textit{virtual machine} dengan memori 4GB RAM, 2 \textit{virtual CPU}
+dengan arsitektur x86\_64 dan sistem operasi Ubuntu 24.04 LTS. \\
+
+Digunakan teknik kontainerisasi mengunakan Docker Engine yang terdiri dari dua kontainer:
+\begin{enumerate}
+    \item Kontainer Server (0.0.0.0:8081)
+    \item Kontainer Web (0.0.0.0:8080)
+\end{enumerate} \\
+
+Untuk itu digunakan Docker Compose yang dapat membantu menjalankan sistem multi-kontainer tersebut.  \\
+
+Terakhir digunakan Caddy yang merupakan \textit{web server} modern untuk melakukan distribusi file-file \textit{frontend} ke Web Browser pengguna.
+Caddy tersebut akan dijadikan sebuah \textit{service} pada Docker Compose yang akan mengekspos port 80 dan 443 dengan \textit{reverse proxy} yang memiliki spesifikasi:
+\begin{enumerate}
+    \item Endpoint "/" akan diteruskan ke kontainer Web pada port 8080
+    \item Endpoint "/query" akan diteruskan ke kontainer Server pada port 8081
+\end{enumerate} \\
+
+Untuk meningkatkan modularitas deployment yang berbeda domain, dapat digunakan sebuah file \textbf{.env} yang berisi satu
+\textit{environment variable} dengan nama \textbf{DOMAIN}, dan memiliki nilai nama domain tempat deployment dilakukan (misalnya "\textbf{localhost}" jika deploy di mesin lokal).
+
 
 \subsection{Pengujian}
+
+\subsubsection{Pengujian HTML melalui Teks}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test1-view.png}
+    \caption{Kasus Uji 1 (Tampilan)}
+    \label{fig:test1-view}
+\end{figure}
+
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test1-stat.png}
+    \caption{Kasus Uji 1 (Statistik)}
+    \label{fig:test1-stat}
+\end{figure}
+
+\pagebreak
+
+
+\subsubsection{Pengujian HTML melalui URL}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test2-view.png}
+    \caption{Kasus Uji 2 (Tampilan)}
+    \label{fig:test2-view}
+\end{figure}
+
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test2-stat.png}
+    \caption{Kasus Uji 2 (Statistik)}
+    \label{fig:test2-stat}
+\end{figure}
+
+\pagebreak
+
+\subsubsection{Pengujian HTML melalui File}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test3-view.png}
+    \caption{Kasus Uji 3 (Tampilan)}
+    \label{fig:test3-view}
+\end{figure}
+
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test3-stat.png}
+    \caption{Kasus Uji 3 (Statistik)}
+    \label{fig:test3-stat}
+\end{figure}
+
+
+\pagebreak
+
+
+\subsubsection{Pengujian Kueri CSS Selector 1}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test4-view.png}
+    \caption{Kasus Uji 4 (Tampilan)}
+    \label{fig:test4-view}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test4-stat.png}
+    \caption{Kasus Uji 4 (Statistik)}
+    \label{fig:test4-stat}
+\end{figure}
+
+\pagebreak
+
+\subsubsection{Pengujian Kueri CSS Selector 2}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test5-view.png}
+    \caption{Kasus Uji 5 (Tampilan)}
+    \label{fig:test5-view}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test5-stat.png}
+    \caption{Kasus Uji 5 (Statistik)}
+    \label{fig:test5-stat}
+\end{figure}
+
+
+\pagebreak
+
+
+\subsubsection{Pengujian Kueri CSS Selector 3}
+
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test6-view.png}
+    \caption{Kasus Uji 6 (Tampilan)}
+    \label{fig:test6-view}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test6-stat.png}
+    \caption{Kasus Uji 6 (Statistik)}
+    \label{fig:test6-stat}
+\end{figure}
+
+
+\pagebreak
+
+\subsubsection{Pengujian Kueri CSS Selector Tidak Valid}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test7.png}
+    \caption{Kasus Uji 7}
+    \label{fig:test7}
+\end{figure}
+
+\pagebreak
+
+\subsubsection{Pengujian Kueri LCA 1}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test8-view.png}
+    \caption{Kasus Uji 8 (Tampilan)}
+    \label{fig:test8-view}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test8-stat.png}
+    \caption{Kasus Uji 8 (Statistik)}
+    \label{fig:test8-stat}
+\end{figure}
+
+\pagebreak
+
+\subsubsection{Pengujian Kueri LCA 2}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test9-view.png}
+    \caption{Kasus Uji 9 (Tampilan)}
+    \label{fig:test9-view}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test9-stat.png}
+    \caption{Kasus Uji 9 (Statistik)}
+    \label{fig:test9-stat}
+\end{figure}
+
+\pagebreak
+
+\subsubsection{Pengujian Kueri LCA 3}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test10-view.png}
+    \caption{Kasus Uji 10 (Tampilan)}
+    \label{fig:test10-view}
+\end{figure}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test10-stat.png}
+    \caption{Kasus Uji 10 (Statistik)}
+    \label{fig:test10-stat}
+\end{figure}
+
+\pagebreak
+
+
+\subsubsection{Pengujian Kueri LCA Tidak Valid}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=10cm, height=7cm]{test11.png}
+    \caption{Kasus Uji 11}
+    \label{fig:test11}
+\end{figure}
+
 
 \pagebreak
 
@@ -1358,6 +1575,8 @@ Tugas ini disusun sepenuhnya tanpa bantuan kecerdasan buatan (\textit{Generative
 
 Repository Github: \\ \url{https://github.com/FieryBanana101/Tubes2_kata-josh-nama-timnya-jangan-ini} \\
 
+Website: \\ \url{https://html-dom-explorer.682b5f20.nip.io}
+
 
 \begin{table}[h]
     \centering
@@ -1374,19 +1593,19 @@ Repository Github: \\ \url{https://github.com/FieryBanana101/Tubes2_kata-josh-na
         \hline
         4. & Aplikasi dapat melakukan scraping terhadap web pada input & \checkmark & &
         \hline
-        5. & Aplikasi dapat menampilkan visualisasi pohon DOM & & \checkmark & 
+        5. & Aplikasi dapat menampilkan visualisasi pohon DOM & \checkmark & & 
         \hline
-        6. & Aplikasi dapat menelusuri pohon DOM dan menampilkan hasil penelusuran & & \checkmark & 
+        6. & Aplikasi dapat menelusuri pohon DOM dan menampilkan hasil penelusuran & \checkmark & & 
         \hline
-        7. & Aplikasi dapat menandai jalur tempuh oleh algoritma  &  & \checkmark &
+        7. & Aplikasi dapat menandai jalur tempuh oleh algoritma  &  \checkmark & &
         \hline
-        8. & Aplikasi dapat menyimpan jalur yang ditempuh algoritma dalam traversal log  &  &  \checkmark &
+        8. & Aplikasi dapat menyimpan jalur yang ditempuh algoritma dalam traversal log  &  \checkmark &  &
         \hline
         9. & [Bonus] Membuat video  &  & \checkmark &
         \hline
-        10. & [Bonus] Deploy aplikasi  &  & \checkmark &
+        10. & [Bonus] Deploy aplikasi  &  \checkmark &  &
         \hline
-        11. & [Bonus] Implementasi animasi pada penelusuran pohon  &  & \checkmark &
+        11. & [Bonus] Implementasi animasi pada penelusuran pohon  &  \checkmark &  &
         \hline
         12. & [Bonus] Implementasi multithreading  & \checkmark & &
         \hline
@@ -1403,11 +1622,11 @@ Repository Github: \\ \url{https://github.com/FieryBanana101/Tubes2_kata-josh-na
         \hline
         \textbf{No} & \textbf{Anggota} & \textbf{Detail Tugas} & \textbf{Presentase Keseluruhan} \\
         \hline
-        1. & Muhammad Fatih Irkham Mauludi (13524004) & Keseluruhan CSS Selector Parser, DFS + BFS dengan \textit{multi-threading}, LCA + Binary Lifting, testing keseluruhan, dan pembuatan keseluruhan laporan & 33.3333\% & 
+        1. & Muhammad Fatih Irkham Mauludi (13524004) & Keseluruhan CSS Selector Parser, DFS + BFS dengan \textit{multi-threading}, LCA + Binary Lifting, testing keseluruhan, sebagian animasi dan komponen front-end, integrasi dengan front-end, deployment, dan pembuatan keseluruhan laporan & 50\% & 
         \hline
-        2. & Josh Reinhart Zidik (13524048) & Keseluruhan HTML Parser, testing keseluruhan & 33.3333\% & 
+        2. & Josh Reinhart Zidik (13524048) & Keseluruhan HTML Parser, skema integrasi, deployment, testing keseluruhan & 30\% & 
         \hline
-        3. & Jingglang Galih Rinenggan (13524095) & Keseluruhan aplikasi frontend, animasi, web scraping, deployment, testing keseluruhan & 33.3333\% &
+        3. & Jingglang Galih Rinenggan (13524095) & Dasar aplikasi frontend, animasi, web scraping, testing keseluruhan & 20\% &
         \hline
     \end{tabular}
 \end{table}
