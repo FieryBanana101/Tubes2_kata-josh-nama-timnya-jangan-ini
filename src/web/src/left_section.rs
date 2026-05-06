@@ -101,7 +101,7 @@ pub fn LeftSection() -> Html {
             };
             
             if content.trim().is_empty() {
-                alert("HTML content is empty");
+                alert("HTML content / URL is empty");
                 return;
             }
 
@@ -135,6 +135,12 @@ pub fn LeftSection() -> Html {
                                     alert(&parsed.err);
                                     return;
                                 }
+
+                                if parsed.nodes_count == 0 {
+                                    alert("HTML does not represent any DOM Nodes");
+                                    return;
+                                }
+
                                 html_nodes_count.set(parsed.nodes_count);
                                 html_depth.set(parsed.depth);
                                 html_duration.set(parsed.duration);

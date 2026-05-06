@@ -24,7 +24,7 @@ pub fn HtmlInput(props: &Props) -> Html {
             <div>
                 <input ref={props.file_input_ref.clone()} onchange={props.on_file_change.clone()} data-active={(props.input_type_str == "file").to_string()} class="hidden data-[active=true]:block" type="file"/>
                 <input ref={props.url_input_ref.clone()} data-active={(props.input_type_str == "url").to_string()} class="hidden data-[active=true]:block w-full" type="text" />
-                <textarea ref={props.text_input_ref.clone()} data-active={(props.input_type_str == "plain_text").to_string()} class="hidden data-[active=true]:block w-full min-h-20"/>
+                <textarea ref={props.text_input_ref.clone()} data-active={(props.input_type_str == "plain_text").to_string()} class="hidden data-[active=true]:block w-full min-h-[300px]"/>
             </div>
         </div>
     }
