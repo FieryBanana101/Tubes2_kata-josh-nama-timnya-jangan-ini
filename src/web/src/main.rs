@@ -301,10 +301,8 @@ fn App() -> Html {
                         .collect::<Vec<_>>()
                         .join(" ");
                     
-                    let id_part = if !node.id.is_empty() { format!(" id=\"{}\"", node.id) } else { String::new() };
-                    let class_part = if !node.class.is_empty() { format!(" class=\"{}\"", node.class) } else { String::new() };
                     let attrs_part = if !attrs_str.is_empty() { format!(" {}", attrs_str) } else { String::new() };
-                    let tag_html = format!("<{}{}{}{}>", node.tag, id_part, class_part, attrs_part);
+                    let tag_html = format!("<{}{}>", node.tag, attrs_part);
 
                     html! {
                         <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50">
